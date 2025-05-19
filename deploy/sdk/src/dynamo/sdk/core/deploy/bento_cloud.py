@@ -27,7 +27,11 @@ from rich.console import Console
 
 from dynamo.runtime.logging import configure_dynamo_logging
 from dynamo.sdk.core.protocol.deployment import Deployment as ProtocolDeployment
-from dynamo.sdk.core.protocol.deployment import DeploymentManager, DeploymentStatus
+from dynamo.sdk.core.protocol.deployment import (
+    DeploymentManager,
+    DeploymentResponse,
+    DeploymentStatus,
+)
 
 # Configure logging to suppress INFO HTTP logs
 logging.getLogger("httpx").setLevel(logging.WARNING)  # HTTP client library logs
@@ -95,7 +99,9 @@ class BentoCloudDeploymentManager(DeploymentManager):
             )
             raise BentoMLException(f"Failed to login to Dynamo Cloud: {str(e)}") from e
 
-    def create_deployment(self, deployment: ProtocolDeployment, **kwargs) -> str:
+    def create_deployment(
+        self, deployment: ProtocolDeployment, **kwargs
+    ) -> DeploymentResponse:
         wait = kwargs.get("wait", True)
         timeout = kwargs.get("timeout", 3600)
         envs = kwargs.get("envs")
@@ -142,7 +148,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
                     raise RuntimeError(
                         (500, "Deployment did not become ready in time.", None)
                     )
-            return deployment_obj.name
+            return deployment_obj
         except BentoMLException as e:
             error_msg = str(e)
             if "already exists" in error_msg:
@@ -154,7 +160,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
     ) -> None:
         raise NotImplementedError
 
-    def get_deployment(self, deployment_id: str, **kwargs) -> dict[str, t.Any]:
+    def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
         try:
             deployment_obj = self._cloud_client.deployment.get(name=deployment_id)
             return (
@@ -166,7 +172,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
             error_msg = str(e)
             raise RuntimeError((404, error_msg, None))
 
-    def list_deployments(self, **kwargs) -> list[dict[str, t.Any]]:
+    def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
         try:
             deployments = self._cloud_client.deployment.list()
             return [
@@ -183,9 +189,18 @@ class BentoCloudDeploymentManager(DeploymentManager):
             error_msg = str(e)
             raise RuntimeError((404, error_msg, None))
 
-    def get_status(self, deployment_id: str, **kwargs) -> DeploymentStatus:
-        dep = self.get_deployment(deployment_id)
-        status = dep.get("status", "unknown")
+    def get_status(
+        self,
+        deployment_id: t.Optional[str] = None,
+        deployment: t.Optional[DeploymentResponse] = None,
+    ) -> DeploymentStatus:
+        if deployment_id:
+            dep = self.get_deployment(deployment_id)
+        elif deployment:
+            dep = deployment
+        else:
+            raise ValueError("Either deployment_id or deployment must be provided")
+        status = dep["status"].get("status", "unknown")
         if status == "running":
             return DeploymentStatus.RUNNING
         elif status == "failed":
@@ -197,14 +212,12 @@ class BentoCloudDeploymentManager(DeploymentManager):
         else:
             return DeploymentStatus.PENDING
 
-    def wait_until_ready(
-        self, deployment_id: str, timeout: int = 3600, **kwargs
-    ) -> bool:
+    def wait_until_ready(self, deployment_id: str, timeout: int = 3600) -> bool:
         import time
 
         start = time.time()
         while time.time() - start < timeout:
-            status = self.get_status(deployment_id)
+            status = self.get_status(deployment_id=deployment_id)
             if status == DeploymentStatus.RUNNING:
                 return True
             elif status == DeploymentStatus.FAILED:
@@ -212,6 +225,19 @@ class BentoCloudDeploymentManager(DeploymentManager):
             time.sleep(5)
         return False
 
-    def get_endpoint_urls(self, deployment_id: str, **kwargs) -> list[str]:
-        dep = self.get_deployment(deployment_id)
-        return dep.get("urls", [])
+    def get_endpoint_urls(
+        self,
+        deployment_id: t.Optional[str] = None,
+        deployment: t.Optional[DeploymentResponse] = None,
+    ) -> list[str]:
+        if deployment_id:
+            dep = self.get_deployment(deployment_id)
+        elif deployment:
+            dep = deployment
+        else:
+            raise ValueError("Either deployment_id or deployment must be provided")
+        latest = self._cloud_client.deployment._client.v2.get_deployment(
+            dep["name"], dep["cluster"]
+        )
+        urls = latest.urls if hasattr(latest, "urls") else None
+        return urls if urls is not None else []

@@ -83,6 +83,17 @@ class DeploymentStatus(str, Enum):
     TERMINATED = "terminate"
     SCALED_TO_ZERO = "scaled_to_zero"
 
+    @property
+    def color(self) -> str:
+        return {
+            DeploymentStatus.RUNNING: "green",
+            DeploymentStatus.IN_PROGRESS: "yellow",
+            DeploymentStatus.PENDING: "yellow",
+            DeploymentStatus.FAILED: "red",
+            DeploymentStatus.TERMINATED: "red",
+            DeploymentStatus.SCALED_TO_ZERO: "yellow",
+        }.get(self, "white")
+
 
 @dataclass
 class ScalingPolicy:
@@ -121,11 +132,15 @@ class Deployment:
     services: list[Service] = field(default_factory=list)
 
 
+# Type alias for deployment responses (e.g., from backend APIs)
+DeploymentResponse = dict[str, t.Any]
+
+
 class DeploymentManager(ABC):
     """Interface for managing dynamo graph deployments."""
 
     @abstractmethod
-    def create_deployment(self, deployment: Deployment, **kwargs) -> str:
+    def create_deployment(self, deployment: Deployment, **kwargs) -> DeploymentResponse:
         """Create new deployment.
 
         Args:
@@ -133,7 +148,7 @@ class DeploymentManager(ABC):
             **kwargs: Additional backend-specific arguments
 
         Returns:
-            The ID of the created deployment
+            The created deployment
         """
         pass
 
@@ -151,7 +166,7 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def get_deployment(self, deployment_id: str, **kwargs) -> dict[str, t.Any]:
+    def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
         """Get deployment details.
 
         Args:
@@ -164,7 +179,7 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def list_deployments(self, **kwargs) -> list[dict[str, t.Any]]:
+    def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
         """List all deployments.
 
         Args:
@@ -186,12 +201,16 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def get_status(self, deployment_id: str, **kwargs) -> DeploymentStatus:
+    def get_status(
+        self,
+        deployment_id: t.Optional[str] = None,
+        deployment: t.Optional[DeploymentResponse] = None,
+    ) -> DeploymentStatus:
         """Get the current status of a deployment.
 
-        Args:
+        Args (one of):
             deployment_id: The ID of the deployment
-            **kwargs: Additional backend-specific arguments
+            deployment: The deployment response
 
         Returns:
             The current status of the deployment
@@ -199,15 +218,12 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def wait_until_ready(
-        self, deployment_id: str, timeout: int = 3600, **kwargs
-    ) -> bool:
+    def wait_until_ready(self, deployment_id: str, timeout: int = 3600) -> bool:
         """Wait until a deployment is ready.
 
         Args:
             deployment_id: The ID of the deployment
             timeout: Maximum time to wait in seconds
-            **kwargs: Additional backend-specific arguments
 
         Returns:
             True if deployment became ready, False if timed out
@@ -215,12 +231,16 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def get_endpoint_urls(self, deployment_id: str, **kwargs) -> list[str]:
+    def get_endpoint_urls(
+        self,
+        deployment_id: t.Optional[str] = None,
+        deployment: t.Optional[DeploymentResponse] = None,
+    ) -> list[str]:
         """Get the list of endpoint urls attached to a deployment.
 
-        Args:
+        Args (one of):
             deployment_id: The ID of the deployment
-            **kwargs: Additional backend-specific arguments
+            deployment: The deployment response
 
         Returns:
             List of deployment's endpoint urls

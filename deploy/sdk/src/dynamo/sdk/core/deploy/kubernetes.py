@@ -22,6 +22,7 @@ import requests
 from dynamo.sdk.core.protocol.deployment import (
     Deployment,
     DeploymentManager,
+    DeploymentResponse,
     DeploymentStatus,
     Service,
 )
@@ -157,7 +158,7 @@ class KubernetesDeploymentManager(DeploymentManager):
             msg = e.response.text if e.response else str(e)
             raise RuntimeError((status, msg, url))
 
-    def get_deployment(self, deployment_id: str, **kwargs) -> dict[str, t.Any]:
+    def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
         """Get deployment details."""
         url = f"{self.endpoint}/api/v2/deployments/{deployment_id}"
         try:
@@ -169,7 +170,7 @@ class KubernetesDeploymentManager(DeploymentManager):
             msg = e.response.text if e.response else str(e)
             raise RuntimeError((status, msg, url))
 
-    def list_deployments(self, **kwargs) -> list[dict[str, t.Any]]:
+    def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
         """List all deployments."""
         url = f"{self.endpoint}/api/v2/deployments"
         try:
@@ -194,8 +195,17 @@ class KubernetesDeploymentManager(DeploymentManager):
             msg = e.response.text if e.response else str(e)
             raise RuntimeError((status, msg, url))
 
-    def get_status(self, deployment_id: str, **kwargs) -> DeploymentStatus:
-        dep = self.get_deployment(deployment_id)
+    def get_status(
+        self,
+        deployment_id: t.Optional[str] = None,
+        deployment: t.Optional[DeploymentResponse] = None,
+    ) -> DeploymentStatus:
+        if deployment_id:
+            dep = self.get_deployment(deployment_id)
+        elif deployment:
+            dep = deployment
+        else:
+            raise ValueError("Either deployment_id or deployment must be provided")
         status = dep.get("status", "unknown")
         if status == "running":
             return DeploymentStatus.RUNNING
@@ -208,9 +218,7 @@ class KubernetesDeploymentManager(DeploymentManager):
         else:
             return DeploymentStatus.PENDING
 
-    def wait_until_ready(
-        self, deployment_id: str, timeout: int = 3600, **kwargs
-    ) -> bool:
+    def wait_until_ready(self, deployment_id: str, timeout: int = 3600) -> bool:
         start = time.time()
         while time.time() - start < timeout:
             status = self.get_status(deployment_id)
@@ -221,6 +229,15 @@ class KubernetesDeploymentManager(DeploymentManager):
             time.sleep(5)
         return False
 
-    def get_endpoint_urls(self, deployment_id: str, **kwargs) -> list[str]:
-        dep = self.get_deployment(deployment_id)
+    def get_endpoint_urls(
+        self,
+        deployment_id: t.Optional[str] = None,
+        deployment: t.Optional[DeploymentResponse] = None,
+    ) -> list[str]:
+        if deployment_id:
+            dep = self.get_deployment(deployment_id)
+        elif deployment:
+            dep = deployment
+        else:
+            raise ValueError("Either deployment_id or deployment must be provided")
         return dep.get("urls", [])

@@ -48,24 +48,16 @@ def get_deployment_manager(target: str, endpoint: str) -> DeploymentManager:
 
 
 def display_deployment_info(
-    deployment_manager: DeploymentManager, deployment_id: str, summary: bool = False
+    deployment_manager: DeploymentManager, deployment: dict[str, t.Any]
 ) -> None:
     """Display deployment summary, status, and endpoint URLs using rich panels."""
-    dep = deployment_manager.get_deployment(deployment_id)
-    name = dep.get("name") or dep.get("uid") or dep.get("id") or deployment_id
-    status = dep.get("status", "unknown")
-    urls = dep.get("urls", [])
-    created_at = dep.get("created_at", "")
-    status_color = {
-        "running": "green",
-        "in_progress": "yellow",
-        "pending": "yellow",
-        "failed": "red",
-        "terminated": "red",
-    }.get(status, "white")
+    name = deployment.get("name") or deployment.get("uid") or deployment.get("id")
+    status = deployment_manager.get_status(deployment=deployment)
+    urls = deployment_manager.get_endpoint_urls(deployment=deployment)
+    created_at = deployment.get("created_at", "")
     summary = (
         f"[white]Name:[/] [cyan]{name}[/]\n"
-        f"[white]Status:[/] [{status_color}]{status}[/]"
+        f"[white]Status:[/] [{status.color}]{status.value}[/]"
     )
     if created_at:
         summary += f"\n[white]Created:[/] [magenta]{created_at}[/]"
@@ -248,10 +240,7 @@ def get(
     try:
         with console.status(f"[bold green]Getting deployment '{name}'..."):
             deployment = deployment_manager.get_deployment(name)
-            console.print(
-                Panel(str(deployment), title="Deployment Details", style="cyan")
-            )
-            display_deployment_info(deployment_manager, name)
+            display_deployment_info(deployment_manager, deployment)
     except Exception as e:
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
@@ -293,11 +282,7 @@ def list_deployments(
             else:
                 console.print(Panel("[bold]Deployments List[/]", style="blue"))
                 for dep in deployments:
-                    dep_id = dep.get("name") or dep.get("uid") or dep.get("id")
-                    if dep_id:
-                        display_deployment_info(
-                            deployment_manager, dep_id, summary=True
-                        )
+                    display_deployment_info(deployment_manager, dep)
     except Exception as e:
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
