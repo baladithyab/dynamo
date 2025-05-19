@@ -306,6 +306,65 @@ def list_deployments(
 
 
 @app.command()
+def update(
+    name: str = typer.Argument(..., help="Deployment name to update"),
+    target: str = typer.Option(..., "--target", "-t", help="Deployment target"),
+    config_file: t.Optional[typer.FileText] = typer.Option(
+        None, "--config-file", "-f", help="Configuration file path"
+    ),
+    envs: t.Optional[t.List[str]] = typer.Option(
+        None,
+        "--env",
+        help="Environment variable(s) to set (format: KEY=VALUE). Note: These environment variables will be set on ALL services in your Dynamo pipeline.",
+    ),
+    endpoint: str = typer.Option(
+        ..., "--endpoint", "-e", help="Dynamo Cloud endpoint", envvar="DYNAMO_CLOUD"
+    ),
+) -> None:
+    """Update an existing deployment on Dynamo Cloud.
+
+    Update a deployment using parameters or a config yaml file.
+    """
+    deployment_manager = get_deployment_manager(target, endpoint)
+    try:
+        with console.status(f"[bold green]Updating deployment '{name}'..."):
+            deployment = deployment_manager.update_deployment(
+                name=name,
+                config_file=config_file,
+                envs=envs,
+            )
+            console.print(
+                Panel(
+                    "[yellow]Update submitted. It may take a short time for the new pods to become active. Please wait a bit before accessing the deployment to ensure your changes are live.[/yellow]",
+                    title="Status",
+                )
+            )
+            display_deployment_info(deployment_manager, deployment)
+    except Exception as e:
+        if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
+            status, msg, url = e.args[0]
+            if status == 404:
+                console.print(
+                    Panel(
+                        f"Deployment '{name}' not found.\n{msg}",
+                        title="Error",
+                        style="red",
+                    )
+                )
+            else:
+                console.print(
+                    Panel(
+                        f"Failed to update deployment:\n{msg}",
+                        title="Error",
+                        style="red",
+                    )
+                )
+        else:
+            console.print(Panel(str(e), title="Error", style="red"))
+        raise typer.Exit(1)
+
+
+@app.command()
 def delete(
     name: str = typer.Argument(..., help="Deployment name"),
     target: str = typer.Option(..., "--target", "-t", help="Deployment target"),
