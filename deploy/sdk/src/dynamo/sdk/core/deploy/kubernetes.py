@@ -41,36 +41,24 @@ class KubernetesDeploymentManager(DeploymentManager):
         self.session = requests.Session()
         self.namespace = "default"
 
-    def _upload_service(self, service: Service, **kwargs) -> None:
-        """Upload a service to the API store."""
+    def _upload_pipeline(
+        self, pipeline: str, services: t.List[Service], **kwargs
+    ) -> None:
+        """Upload the entire pipeline as a single component/version, with a manifest of all services."""
         session = self.session
         endpoint = self.endpoint
-
-        if ":" not in service.name or len((parts := service.name.split(":"))) != 2:
-            raise ValueError("Invalid service name format, expected 'name:version'")
-        name, version = parts
-        description = f"Auto-registered by Dynamo's KubernetesDeploymentManager for {name}:{version}"
+        pipeline_name, pipeline_version = pipeline.split(":")
 
         comp_url = f"{endpoint}/api/v1/dynamo_components"
         comp_payload = {
-            "name": name,
-            "description": description,
+            "name": pipeline_name,
+            "description": f"Registered by Dynamo's KubernetesDeploymentManager for {pipeline_name}:{pipeline_version}",
         }
-        labels = getattr(service, "environment", None)
-        if labels and isinstance(labels, dict):
-            comp_payload["labels"] = labels
         resp = session.post(comp_url, json=comp_payload)
         if resp.status_code not in (200, 201, 409):
             raise RuntimeError(f"Failed to create component: {resp.text}")
 
-        # Try to extract manifest info from service if available, else use defaults
-        manifest = {
-            "service": name,
-            "apis": getattr(service, "apis", {}),
-            "size_bytes": getattr(service, "size_bytes", 0),
-        }
-
-        ver_url = f"{endpoint}/api/v1/dynamo_components/{name}/versions"
+        ver_url = f"{endpoint}/api/v1/dynamo_components/{pipeline_name}/versions"
         build_at = kwargs.get("build_at")
         if not build_at:
             build_at = datetime.utcnow()
@@ -79,38 +67,56 @@ class KubernetesDeploymentManager(DeploymentManager):
                 build_at = datetime.fromisoformat(build_at)
             except Exception:
                 build_at = datetime.utcnow()
+
+        # Build manifest: a list of all service dicts
+        manifest = {
+            "pipeline": pipeline_name,
+            "version": pipeline_version,
+            "services": [
+                {
+                    "name": svc.name,
+                    "namespace": svc.namespace,
+                    "resources": svc.resources,
+                    "envs": [e if isinstance(e, dict) else e.__dict__ for e in svc.envs]
+                    + (kwargs.get("envs", []) or []),
+                    "secrets": svc.secrets,
+                    "scaling": svc.scaling,
+                    "apis": svc.apis,
+                    "size_bytes": svc.size_bytes,
+                    "config": svc.config,
+                }
+                for svc in services
+            ],
+        }
+
         ver_payload = {
-            "description": description,
-            "version": version,
+            "description": f"Auto-registered version for {pipeline_name}:{pipeline_version}",
+            "version": pipeline_version,
             "manifest": manifest,
             "build_at": build_at.isoformat(),
         }
-        if labels and isinstance(labels, dict):
-            ver_payload["labels"] = [{"key": k, "value": v} for k, v in labels.items()]
         resp = session.post(ver_url, json=ver_payload)
         if resp.status_code not in (200, 201, 409):
             raise RuntimeError(f"Failed to create component version: {resp.text}")
 
-    def create_deployment(self, deployment: Deployment, **kwargs) -> str:
+    def create_deployment(self, deployment: Deployment, **kwargs) -> DeploymentResponse:
         """Create a new deployment. Ensures all components and versions are registered/uploaded before creating the deployment."""
         # For each service/component in the deployment, upload it to the API store
-        for service in deployment.services:
-            self._upload_service(service)
+        self._upload_pipeline(
+            deployment.pipeline or deployment.namespace, deployment.services, **kwargs
+        )
 
         # Now create the deployment
-        component = kwargs.get("pipeline") or deployment.namespace
-        name = deployment.name
         dev = kwargs.get("dev", False)
-        envs = kwargs.get("envs")
         labels = kwargs.get("labels")
         secrets = kwargs.get("secrets")
         services = kwargs.get("services", {})
         access_authorization = kwargs.get("access_authorization", False)
         payload = {
-            "name": name,
-            "component": component,
+            "name": deployment.name,
+            "component": deployment.pipeline or deployment.namespace,
             "dev": dev,
-            "envs": envs,
+            "envs": deployment.envs,
             "labels": labels,
             "secrets": secrets,
             "services": services,
@@ -121,7 +127,7 @@ class KubernetesDeploymentManager(DeploymentManager):
         try:
             resp = self.session.post(url, json=payload)
             resp.raise_for_status()
-            return resp.json().get("name", name)
+            return resp.json()
         except requests.HTTPError as e:
             status = e.response.status_code if e.response else None
             msg = e.response.text if e.response else str(e)
@@ -131,21 +137,18 @@ class KubernetesDeploymentManager(DeploymentManager):
         self, deployment_id: str, deployment: Deployment, **kwargs
     ) -> None:
         """Update an existing deployment."""
-        component = kwargs.get("pipeline") or deployment.namespace
         dev = kwargs.get("dev", False)
-        envs = kwargs.get("envs")
         labels = kwargs.get("labels")
         secrets = kwargs.get("secrets")
-        services = kwargs.get("services", {})
         access_authorization = kwargs.get("access_authorization", False)
         payload = {
             "name": deployment.name,
-            "component": component,
+            "component": deployment.pipeline or deployment.namespace,
             "dev": dev,
-            "envs": envs,
+            "envs": deployment.envs,
             "labels": labels,
             "secrets": secrets,
-            "services": services,
+            "services": deployment.services,
             "access_authorization": access_authorization,
         }
         payload = {k: v for k, v in payload.items() if v is not None}

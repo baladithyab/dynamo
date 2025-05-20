@@ -17,15 +17,22 @@
 
 from __future__ import annotations
 
+import json
 import typing as t
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
+from dynamo.sdk.cli.utils import resolve_service_config
 from dynamo.sdk.core.deploy.bento_cloud import BentoCloudDeploymentManager
 from dynamo.sdk.core.deploy.kubernetes import KubernetesDeploymentManager
-from dynamo.sdk.core.protocol.deployment import Deployment, DeploymentManager, Service
+from dynamo.sdk.core.protocol.deployment import (
+    Deployment,
+    DeploymentManager,
+    DeploymentResponse,
+    Service,
+)
 from dynamo.sdk.core.runner import TargetEnum
 
 app = typer.Typer(
@@ -66,9 +73,38 @@ def display_deployment_info(
     console.print(Panel(summary, title="Deployment", style="cyan"))
 
 
+def _build_env_dicts(
+    config_file: t.Optional[t.TextIO] = None,
+    args: t.Optional[t.List[str]] = None,
+    envs: t.Optional[t.List[str]] = None,
+) -> t.List[dict]:
+    """
+    Build a list of environment variable dicts from config file, args, and env strings.
+
+    Args:
+        config_file: Optional configuration file
+        args: Optional list of extra arguments
+        envs: Optional list of environment variable strings (KEY=VALUE)
+    Returns:
+        List of dicts suitable for use as envs
+    """
+    service_configs = resolve_service_config(config_file=config_file, args=args)
+    env_dicts = []
+    if service_configs:
+        config_json = json.dumps(service_configs)
+        env_dicts.append({"name": "DYN_DEPLOYMENT_CONFIG", "value": config_json})
+    if envs:
+        for env in envs:
+            if "=" not in env:
+                raise RuntimeError(f"Invalid env format: {env}. Use KEY=VALUE.")
+            key, value = env.split("=", 1)
+            env_dicts.append({"name": key, "value": value})
+    return env_dicts
+
+
 def _handle_deploy_create(
     ctx: typer.Context,
-    pipeline: t.Optional[str] = typer.Argument(None, help="Dynamo pipeline to deploy"),
+    pipeline: str = typer.Argument(..., help="Dynamo pipeline to deploy"),
     name: t.Optional[str] = typer.Option(None, "--name", "-n", help="Deployment name"),
     config_file: t.Optional[typer.FileText] = typer.Option(
         None, "--config-file", "-f", help="Configuration file path"
@@ -89,7 +125,7 @@ def _handle_deploy_create(
     ),
     target: str = typer.Option(..., "--target", "-t", help="Deployment target"),
     dev: bool = typer.Option(False, "--dev", help="Development mode for deployment"),
-) -> None:
+) -> DeploymentResponse:
     """Handle deployment creation. This is a helper function for the create and deploy commands.
 
     Args:
@@ -136,20 +172,21 @@ def _handle_deploy_create(
     ]
 
     deployment_manager = get_deployment_manager(target, endpoint)
+    env_dicts = _build_env_dicts(config_file=config_file, args=ctx.args, envs=envs)
     deployment = Deployment(
         name=name or (pipeline if pipeline else "unnamed-deployment"),
         namespace="default",
+        pipeline=pipeline,
         services=services_for_deployment,
+        envs=env_dicts,
     )
     try:
         with console.status("[bold green]Creating deployment...") as status:
             deployment_id = deployment_manager.create_deployment(
                 deployment,
+                pipeline=pipeline,
                 wait=wait,
                 timeout=timeout,
-                envs=envs,
-                config_file=config_file,
-                pipeline=pipeline,
                 dev=dev,
                 args=ctx.args if hasattr(ctx, "args") else None,
             )
@@ -176,6 +213,7 @@ def _handle_deploy_create(
                         )
                     )
             display_deployment_info(deployment_manager, deployment_id)
+            return deployment
     except Exception as e:
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
@@ -215,7 +253,7 @@ def _handle_deploy_create(
 @app.command()
 def create(
     ctx: typer.Context,
-    pipeline: t.Optional[str] = typer.Argument(None, help="Dynamo pipeline to deploy"),
+    pipeline: str = typer.Argument(..., help="Dynamo pipeline to deploy"),
     name: t.Optional[str] = typer.Option(None, "--name", "-n", help="Deployment name"),
     config_file: t.Optional[typer.FileText] = typer.Option(
         None, "--config-file", "-f", help="Configuration file path"
@@ -236,9 +274,9 @@ def create(
     ),
     target: str = typer.Option(..., "--target", "-t", help="Deployment target"),
     dev: bool = typer.Option(False, "--dev", help="Development mode for deployment"),
-) -> None:
+) -> DeploymentResponse:
     """Create a deployment on Dynamo Cloud."""
-    _handle_deploy_create(
+    return _handle_deploy_create(
         ctx, pipeline, name, config_file, wait, timeout, endpoint, envs, target, dev
     )
 
@@ -250,13 +288,14 @@ def get(
     endpoint: str = typer.Option(
         ..., "--endpoint", "-e", help="Dynamo Cloud endpoint", envvar="DYNAMO_CLOUD"
     ),
-) -> None:
+) -> DeploymentResponse:
     """Get details for a specific deployment by name."""
     deployment_manager = get_deployment_manager(target, endpoint)
     try:
         with console.status(f"[bold green]Getting deployment '{name}'..."):
             deployment = deployment_manager.get_deployment(name)
             display_deployment_info(deployment_manager, deployment)
+            return deployment
     except Exception as e:
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
@@ -323,6 +362,7 @@ def list_deployments(
 
 @app.command()
 def update(
+    ctx: typer.Context,
     name: str = typer.Argument(..., help="Deployment name to update"),
     target: str = typer.Option(..., "--target", "-t", help="Deployment target"),
     config_file: t.Optional[typer.FileText] = typer.Option(
@@ -344,10 +384,16 @@ def update(
     deployment_manager = get_deployment_manager(target, endpoint)
     try:
         with console.status(f"[bold green]Updating deployment '{name}'..."):
-            deployment = deployment_manager.update_deployment(
+            env_dicts = _build_env_dicts(
+                config_file=config_file, args=ctx.args, envs=envs
+            )
+            deployment = Deployment(
                 name=name,
-                config_file=config_file,
-                envs=envs,
+                namespace="default",
+                envs=env_dicts,
+            )
+            deployment_manager.update_deployment(
+                deployment_id=name, deployment=deployment
             )
             console.print(
                 Panel(
@@ -355,7 +401,6 @@ def update(
                     title="Status",
                 )
             )
-            display_deployment_info(deployment_manager, deployment)
     except Exception as e:
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
@@ -422,7 +467,7 @@ def delete(
 
 def deploy(
     ctx: typer.Context,
-    pipeline: t.Optional[str] = typer.Argument(None, help="Dynamo pipeline to deploy"),
+    pipeline: str = typer.Argument(..., help="Dynamo pipeline to deploy"),
     name: t.Optional[str] = typer.Option(None, "--name", "-n", help="Deployment name"),
     config_file: t.Optional[typer.FileText] = typer.Option(
         None, "--config-file", "-f", help="Configuration file path"
@@ -443,8 +488,8 @@ def deploy(
     ),
     target: str = typer.Option(..., "--target", "-t", help="Deployment target"),
     dev: bool = typer.Option(False, "--dev", help="Development mode for deployment"),
-) -> None:
+) -> DeploymentResponse:
     """Deploy a Dynamo pipeline (same as deployment create)."""
-    _handle_deploy_create(
+    return _handle_deploy_create(
         ctx, pipeline, name, config_file, wait, timeout, endpoint, envs, target, dev
     )

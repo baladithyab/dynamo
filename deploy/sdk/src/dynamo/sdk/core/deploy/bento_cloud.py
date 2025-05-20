@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import logging
 import typing as t
 
@@ -100,36 +99,16 @@ class BentoCloudDeploymentManager(DeploymentManager):
             raise BentoMLException(f"Failed to login to Dynamo Cloud: {str(e)}") from e
 
     def create_deployment(
-        self, deployment: ProtocolDeployment, **kwargs
+        self, deployment: ProtocolDeployment, pipeline: t.Optional[str], **kwargs
     ) -> DeploymentResponse:
         wait = kwargs.get("wait", True)
         timeout = kwargs.get("timeout", 3600)
-        envs = kwargs.get("envs")
-        config_file = kwargs.get("config_file")
-        pipeline = kwargs.get("pipeline")
         dev = kwargs.get("dev", False)
-        service_configs = None
-        if config_file:
-            try:
-                service_configs = json.load(config_file)
-            except Exception as e:
-                raise RuntimeError((400, f"Failed to load config file: {e}", None))
-        env_dicts = []
-        if service_configs:
-            config_json = json.dumps(service_configs)
-            env_dicts.append({"name": "DYN_DEPLOYMENT_CONFIG", "value": config_json})
-        if envs:
-            for env in envs:
-                if "=" not in env:
-                    raise RuntimeError(
-                        (400, f"Invalid env format: {env}. Use KEY=VALUE.", None)
-                    )
-                key, value = env.split("=", 1)
-                env_dicts.append({"name": key, "value": value})
+
         config_params = DeploymentConfigParameters(
             name=deployment.name,
             bento=pipeline or deployment.namespace,
-            envs=env_dicts,
+            envs=deployment.envs,
             secrets=None,
             cli=True,
             dev=dev,
@@ -156,9 +135,24 @@ class BentoCloudDeploymentManager(DeploymentManager):
             raise RuntimeError((500, error_msg, None))
 
     def update_deployment(
-        self, deployment_id: str, deployment: ProtocolDeployment, **kwargs
-    ) -> None:
-        raise NotImplementedError
+        self, deployment_id: str, deployment: ProtocolDeployment
+    ) -> DeploymentResponse:
+        config_params = DeploymentConfigParameters(
+            name=deployment_id,
+            envs=deployment.envs,
+            cli=True,
+        )
+        try:
+            config_params.verify(create=False)
+        except BentoMLException as e:
+            raise RuntimeError((400, f"Config verification error: {str(e)}", None))
+        try:
+            deployment = self._cloud_client.deployment.update(
+                deployment_config_params=config_params
+            )
+            return deployment
+        except BentoMLException as e:
+            raise RuntimeError((500, f"Deployment update error: {str(e)}", None))
 
     def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
         try:

@@ -114,10 +114,10 @@ class Service:
     name: str
     namespace: str
     id: str | None = None
-    cmd: list[str] = field(default_factory=list)
+    cmd: t.List[str] = field(default_factory=list)
     resources: Resources | None = None
-    envs: list[Env] = field(default_factory=list)
-    secrets: list[str] = field(default_factory=list)
+    envs: t.List[Env] = field(default_factory=list)
+    secrets: t.List[str] = field(default_factory=list)
     scaling: ScalingPolicy = field(default_factory=lambda: ScalingPolicy(policy="none"))
     apis: dict = field(default_factory=dict)
     size_bytes: int = 0
@@ -129,7 +129,9 @@ class Deployment:
 
     name: str
     namespace: str
-    services: list[Service] = field(default_factory=list)
+    pipeline: t.Optional[str] = None
+    services: t.Optional[t.List[Service]] = None
+    envs: t.Optional[t.List[dict]] = None
 
 
 # Type alias for deployment responses (e.g., from backend APIs)
@@ -140,11 +142,14 @@ class DeploymentManager(ABC):
     """Interface for managing dynamo graph deployments."""
 
     @abstractmethod
-    def create_deployment(self, deployment: Deployment, **kwargs) -> DeploymentResponse:
+    def create_deployment(
+        self, deployment: Deployment, pipeline: t.Optional[str], **kwargs
+    ) -> DeploymentResponse:
         """Create new deployment.
 
         Args:
             deployment: Deployment configuration
+            pipeline: Pipeline name (tag result of `dynamo build`). If not provided, the namespace of the deployment will be used.
             **kwargs: Additional backend-specific arguments
 
         Returns:
