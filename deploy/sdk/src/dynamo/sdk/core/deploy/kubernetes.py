@@ -55,7 +55,8 @@ class KubernetesDeploymentManager(DeploymentManager):
             "description": f"Registered by Dynamo's KubernetesDeploymentManager for {pipeline_name}:{pipeline_version}",
         }
         resp = session.post(comp_url, json=comp_payload)
-        if resp.status_code not in (200, 201, 409):
+        if resp.status_code not in (200, 201, 409, 422):
+            print(resp.status_code)
             raise RuntimeError(f"Failed to create component: {resp.text}")
 
         ver_url = f"{endpoint}/api/v1/dynamo_components/{pipeline_name}/versions"
@@ -74,16 +75,9 @@ class KubernetesDeploymentManager(DeploymentManager):
             "version": pipeline_version,
             "services": [
                 {
-                    "name": svc.name,
-                    "namespace": svc.namespace,
-                    "resources": svc.resources,
-                    "envs": [e if isinstance(e, dict) else e.__dict__ for e in svc.envs]
-                    + (kwargs.get("envs", []) or []),
-                    "secrets": svc.secrets,
-                    "scaling": svc.scaling,
+                    "service": svc.name,
                     "apis": svc.apis,
                     "size_bytes": svc.size_bytes,
-                    "config": svc.config,
                 }
                 for svc in services
             ],
@@ -103,7 +97,9 @@ class KubernetesDeploymentManager(DeploymentManager):
         """Create a new deployment. Ensures all components and versions are registered/uploaded before creating the deployment."""
         # For each service/component in the deployment, upload it to the API store
         self._upload_pipeline(
-            deployment.pipeline or deployment.namespace, deployment.services, **kwargs
+            pipeline=deployment.pipeline or deployment.namespace,
+            services=deployment.services,
+            **kwargs,
         )
 
         # Now create the deployment

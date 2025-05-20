@@ -99,7 +99,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
             raise BentoMLException(f"Failed to login to Dynamo Cloud: {str(e)}") from e
 
     def create_deployment(
-        self, deployment: ProtocolDeployment, pipeline: t.Optional[str], **kwargs
+        self, deployment: ProtocolDeployment, **kwargs
     ) -> DeploymentResponse:
         wait = kwargs.get("wait", True)
         timeout = kwargs.get("timeout", 3600)
@@ -107,7 +107,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
 
         config_params = DeploymentConfigParameters(
             name=deployment.name,
-            bento=pipeline or deployment.namespace,
+            bento=deployment.pipeline or deployment.namespace,
             envs=deployment.envs,
             secrets=None,
             cli=True,

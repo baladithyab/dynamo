@@ -184,11 +184,9 @@ def _handle_deploy_create(
         with console.status("[bold green]Creating deployment...") as status:
             deployment_id = deployment_manager.create_deployment(
                 deployment,
-                pipeline=pipeline,
                 wait=wait,
                 timeout=timeout,
                 dev=dev,
-                args=ctx.args if hasattr(ctx, "args") else None,
             )
             status.update(
                 f"[bold green]Deployment '{deployment_id}' created. Waiting for status..."
