@@ -282,7 +282,7 @@ async def get_dynamo_component_list(
 
         # Execute count query
         result = await session.exec(total_statement)
-        total = result.scalar_one_or_none() or 0
+        total = result.first() or 0
 
         # Apply pagination and sorting
         if query_params.sort_asc is not None:
@@ -296,7 +296,7 @@ async def get_dynamo_component_list(
 
         # Execute main query
         result = await session.exec(statement)
-        dynamo_components = result.scalars().all()
+        dynamo_components = result.all()
 
         # Rest of your code remains the same
         dynamo_component_schemas = await convert_dynamo_component_model_to_schema(
@@ -326,6 +326,21 @@ async def dynamo_component_version_handler(
     dynamo_component_name: str,
     version: str,
 ) -> tuple[DynamoComponentVersion, DynamoComponent]:
+    # First check if the component exists
+    component_statement = select(DynamoComponent).where(
+        DynamoComponent.name == dynamo_component_name
+    )
+    component_result = await session.exec(component_statement)
+    component = component_result.first()
+
+    if not component:
+        logger.error(f"Dynamo Component '{dynamo_component_name}' not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dynamo Component '{dynamo_component_name}' not found",
+        )
+
+    # Then check for the specific version
     statement = select(DynamoComponentVersion, DynamoComponent).where(
         DynamoComponentVersion.dynamo_component_id == DynamoComponent.id,
         DynamoComponentVersion.version == version,
@@ -336,14 +351,21 @@ async def dynamo_component_version_handler(
     records = result.all()
 
     if not records:
-        logger.error("No Dynamo Component version record found")
-        raise HTTPException(status_code=404, detail="Record not found")
+        logger.error(
+            f"No version '{version}' found for Dynamo Component '{dynamo_component_name}'"
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version '{version}' not found for Dynamo Component '{dynamo_component_name}'",
+        )
 
     if len(records) >= 2:
-        logger.error("Found multiple relations for Dynamo Component version")
+        logger.error(
+            f"Found multiple relations for Dynamo Component version '{version}' of '{dynamo_component_name}'"
+        )
         raise HTTPException(
             status_code=422,
-            detail="Found multiple relations for Dynamo Component version",
+            detail=f"Found multiple relations for Dynamo Component version '{version}' of '{dynamo_component_name}'",
         )
 
     return records[0]
