@@ -282,7 +282,7 @@ async def get_dynamo_component_list(
 
         # Execute count query
         result = await session.exec(total_statement)
-        total = result.scalar() or 0
+        total = result.scalar_one_or_none() or 0
 
         # Apply pagination and sorting
         if query_params.sort_asc is not None:

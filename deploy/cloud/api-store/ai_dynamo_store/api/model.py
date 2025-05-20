@@ -73,12 +73,12 @@ def make_aware(dt: Optional[datetime]) -> Optional[datetime]:
 
 
 class DynamoComponentVersion(DynamoComponentVersionBase, table=True):
-    """A row in the dynamo nim table."""
+    """A row in the dynamo component table."""
 
-    __tablename__ = "dynamonimversion"
+    __tablename__ = "dynamocomponentversion"
     __table_args__ = (
         UniqueConstraint(
-            "dynamo_component_id", "version", name="version_unique_per_nim"
+            "dynamo_component_id", "version", name="version_unique_per_component"
         ),
     )
 
@@ -97,13 +97,13 @@ class DynamoComponentVersion(DynamoComponentVersionBase, table=True):
     # upload_finished_at: datetime = SQLField(sa_column=Column(DateTime, nullable=True))
     build_at: datetime = SQLField(sa_column=Column(DateTime, nullable=False))
 
-    dynamo_component_id: str = SQLField(foreign_key="dynamonim.id")
+    dynamo_component_id: str = SQLField(foreign_key="dynamocomponent.id")
 
 
 class DynamoComponent(DynamoComponentBase, table=True):
-    """A row in the dynamo nim table."""
+    """A row in the dynamo component table."""
 
-    __tablename__ = "dynamonim"
+    __tablename__ = "dynamocomponent"
 
     id: str = SQLField(default_factory=new_compound_entity_id, primary_key=True)
 
