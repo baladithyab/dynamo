@@ -21,8 +21,16 @@ import importlib
 import logging
 import os
 import sys
-from typing import Optional, TypeVar
+from typing import Dict, Optional, TypeVar
 
+import yaml
+
+from dynamo.sdk.core.lib import get_target
+from dynamo.sdk.core.protocol.interface import (
+    DynamoConfig,
+    ServiceConfig,
+    ServiceInterface,
+)
 from dynamo.sdk.lib.service import DynamoService
 
 logger = logging.getLogger(__name__)
@@ -191,3 +199,55 @@ def _do_import(import_str: str, working_dir: str) -> DynamoService:
         object.__setattr__(instance, "_import_str", import_str_val)
 
     return instance
+
+
+def load_built_services(
+    pipeline_tag: str, build_dir: str = "~/bentoml/bentos"
+) -> Dict[str, ServiceInterface]:
+    """
+    Given a built pipeline tag (e.g. frontend:2uk2fwzvqsswvs7t), load all dynamo service classes from the built graph as ServiceInterface instances.
+    Returns a dict mapping service name to the instantiated ServiceInterface object.
+    """
+    if ":" not in pipeline_tag:
+        raise ValueError("pipeline_tag must be in the form name:version")
+    name, version = pipeline_tag.split(":", 1)
+    graph_dir = os.path.expanduser(f"{build_dir}/{name}/{version}")
+    if not os.path.isdir(graph_dir):
+        raise FileNotFoundError(f"Pipeline directory not found: {graph_dir}")
+
+    config_path = os.path.join(graph_dir, "bento.yaml")
+    if not os.path.isfile(config_path):
+        raise FileNotFoundError(
+            f"Pipeline config (bento.yaml) not found in {graph_dir}"
+        )
+    with open(config_path, encoding="utf-8") as f:
+        graph_cfg = yaml.safe_load(f)
+
+    # Add src_dir to sys.path if needed
+    src_dir = os.path.join(graph_dir, "src")
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+
+    # Import the main module
+    module_name, _ = graph_cfg.get("service", "").split(":", 1)
+    module = importlib.import_module(module_name)
+
+    # Use the current DeploymentTarget to instantiate all services as ServiceInterface
+    target = get_target()
+    services = {}
+    for svc in graph_cfg.get("services", []):
+        svc_name = svc["name"]
+        svc_class = getattr(module, svc_name, None)
+        if svc_class is None:
+            raise ImportError(
+                f"Dynamo service class '{svc_name}' not found in module '{module_name}'"
+            )
+        # If already a ServiceInterface, get the inner class
+        if isinstance(svc_class, ServiceInterface):
+            svc_class = svc_class.inner
+        config = ServiceConfig(svc.get("config", {}))
+        dynamo_config = (
+            DynamoConfig(**config.get("dynamo", {})) if "dynamo" in config else None
+        )
+        services[svc_name] = target.create_service(svc_class, config, dynamo_config)
+    return services

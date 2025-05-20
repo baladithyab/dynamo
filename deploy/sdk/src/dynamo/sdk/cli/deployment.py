@@ -99,21 +99,37 @@ def _handle_deploy_create(
     """
 
     from dynamo.sdk.cli.utils import configure_target_environment
-    from dynamo.sdk.lib.loader import find_and_load_service
+    from dynamo.sdk.lib.loader import load_built_services
 
     # TODO: hardcoding this is a hack to get the services for the deployment
     # we should find a better way to do this once build is finished/generic
     configure_target_environment(TargetEnum.BENTO)
-    svc = find_and_load_service(pipeline)
-    pipeline_services = svc.all_services()
+    pipeline_services = load_built_services(pipeline)
+    print("pipeline_services", pipeline_services)
+
+    def print_service_details(svc):
+        print(f"Service: {svc.name}")
+        print(f"  service namespace: {svc.config['dynamo']['namespace']}")
+        print(f"  service envs: {svc.envs}")
+        print(f"  service apis: {svc.get_bentoml_service().apis}")
+        print(f"  service size_bytes: {getattr(svc, 'size_bytes', 0)}")
+        print(f"  Config: {dict(svc.config)}")
+        print(f"  Endpoints: {svc.list_endpoints()}")
+        print(f"  Dependencies: {list(svc.dependencies.keys())}")
+        print("-" * 40)
+
+    for svc in pipeline_services.values():
+        print_service_details(svc)
 
     services_for_deployment = [
         Service(
             name=svc.name,
             namespace=svc.config["dynamo"]["namespace"],
-            envs=svc.envs,
-            apis=svc.get_bentoml_service().apis,
-            size_bytes=getattr(svc, "size_bytes", 0),
+            envs=svc.envs,  # TODO: this isn't working yet, it's currently blank
+            apis=svc.list_endpoints(),  # TODO: this isn't working yet, it's currently blank
+            size_bytes=getattr(
+                svc, "size_bytes", 0
+            ),  # TODO: this isn't working yet, it's currently 0
             # TODO: add the rest later
         )
         for svc in pipeline_services.values()
