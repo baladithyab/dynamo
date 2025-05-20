@@ -29,16 +29,6 @@ operator-src:
     COPY ./deploy/cloud/operator /artifacts/operator
     SAVE ARTIFACT /artifacts/operator
 
-
-# artifact-base:
-#     FROM python:3.12-slim-bookworm
-#     WORKDIR /artifacts
-
-# dynamo-source-artifacts:
-#     FROM +artifact-base
-#     COPY . /artifacts
-#     SAVE ARTIFACT /artifacts
-
 uv-source:
     FROM ghcr.io/astral-sh/uv:latest
     SAVE ARTIFACT /uv
@@ -124,7 +114,6 @@ dynamo-build:
         ln -sf /workspace/target/release/http /workspace/deploy/sdk/src/dynamo/sdk/cli/bin/http && \
         ln -sf /workspace/target/release/llmctl /workspace/deploy/sdk/src/dynamo/sdk/cli/bin/llmctl
 
-
     RUN cd /workspace/lib/bindings/python && \
         uv build --wheel --out-dir /workspace/dist --python 3.12
     RUN cd /workspace && \
@@ -141,7 +130,6 @@ dynamo-base-docker:
 
     FROM ubuntu:24.04
     WORKDIR /workspace
-    COPY container/deps/requirements.txt /tmp/requirements.txt
 
     # Install Python and other dependencies
     RUN apt-get update && \
@@ -161,7 +149,7 @@ dynamo-base-docker:
     ENV VIRTUAL_ENV=/opt/dynamo/venv
     ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-    RUN uv pip install -r /tmp/requirements.txt
+    RUN uv pip install fastapi uvicorn kubernetes==32.0.1
 
     # Copy and install wheels -- ai-dynamo-runtime first, then ai-dynamo
     COPY +dynamo-build/ai_dynamo_runtime*.whl /tmp/wheels/
