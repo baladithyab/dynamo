@@ -181,37 +181,35 @@ def _handle_deploy_create(
         envs=env_dicts,
     )
     try:
-        with console.status("[bold green]Creating deployment...") as status:
-            deployment_id = deployment_manager.create_deployment(
-                deployment,
-                wait=wait,
-                timeout=timeout,
-                dev=dev,
-            )
-            status.update(
-                f"[bold green]Deployment '{deployment_id}' created. Waiting for status..."
-            )
-            if wait:
-                ready = deployment_manager.wait_until_ready(
-                    deployment_id, timeout=timeout
+        console.print("[bold green]Creating deployment...")
+        deployment_id = deployment_manager.create_deployment(
+            deployment,
+            wait=wait,
+            timeout=timeout,
+            dev=dev,
+        )
+        console.print(
+            f"[bold green]Deployment '{deployment_id}' created. Waiting for status..."
+        )
+        if wait:
+            ready = deployment_manager.wait_until_ready(deployment_id, timeout=timeout)
+            if ready:
+                console.print(
+                    Panel(
+                        f"Deployment [bold]{deployment_id}[/] is [green]ready[/]",
+                        title="Status",
+                    )
                 )
-                if ready:
-                    console.print(
-                        Panel(
-                            f"Deployment [bold]{deployment_id}[/] is [green]ready[/]",
-                            title="Status",
-                        )
+            else:
+                console.print(
+                    Panel(
+                        f"Deployment [bold]{deployment_id}[/] did not become ready in time.",
+                        title="Status",
+                        style="red",
                     )
-                else:
-                    console.print(
-                        Panel(
-                            f"Deployment [bold]{deployment_id}[/] did not become ready in time.",
-                            title="Status",
-                            style="red",
-                        )
-                    )
-            display_deployment_info(deployment_manager, deployment_id)
-            return deployment
+                )
+        display_deployment_info(deployment_manager, deployment_id)
+        return deployment
     except Exception as e:
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
