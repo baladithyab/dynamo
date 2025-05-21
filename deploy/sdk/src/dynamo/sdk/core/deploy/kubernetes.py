@@ -41,9 +41,7 @@ class KubernetesDeploymentManager(DeploymentManager):
         self.session = requests.Session()
         self.namespace = "default"
 
-    def _upload_pipeline(
-        self, pipeline: str, services: t.List[Service], **kwargs
-    ) -> None:
+    def _upload_pipeline(self, pipeline: str, entry_service: Service, **kwargs) -> None:
         """Upload the entire pipeline as a single component/version, with a manifest of all services."""
         session = self.session
         endpoint = self.endpoint
@@ -52,7 +50,7 @@ class KubernetesDeploymentManager(DeploymentManager):
         comp_url = f"{endpoint}/api/v1/dynamo_components"
         comp_payload = {
             "name": pipeline_name,
-            "description": f"Registered by Dynamo's KubernetesDeploymentManager for {pipeline_name}:{pipeline_version}",
+            "description": "Registered by Dynamo's KubernetesDeploymentManager",
         }
         resp = session.post(comp_url, json=comp_payload)
         if resp.status_code not in (200, 201, 409, 422):
@@ -69,28 +67,22 @@ class KubernetesDeploymentManager(DeploymentManager):
             except Exception:
                 build_at = datetime.utcnow()
 
-        # Build manifest: a list of all service dicts
         manifest = {
-            "pipeline": pipeline_name,
-            "version": pipeline_version,
-            "services": [
-                {
-                    "service": svc.name,
-                    "apis": svc.apis,
-                    "size_bytes": svc.size_bytes,
-                }
-                for svc in services
-            ],
+            "service": entry_service.service_name,
+            "apis": entry_service.apis,
+            "size_bytes": entry_service.size_bytes,
         }
 
         ver_payload = {
-            "description": f"Auto-registered version for {pipeline_name}:{pipeline_version}",
-            "version": pipeline_version,
+            "name": entry_service.name,
+            "description": f"Auto-registered version for {pipeline}",
+            "resource_type": "dynamo_component_version",
+            "version": entry_service.version,
             "manifest": manifest,
             "build_at": build_at.isoformat(),
         }
         resp = session.post(ver_url, json=ver_payload)
-        if resp.status_code not in (200, 201, 409):
+        if resp.status_code not in (200, 201, 409, 422):
             raise RuntimeError(f"Failed to create component version: {resp.text}")
 
     def create_deployment(self, deployment: Deployment, **kwargs) -> DeploymentResponse:
@@ -98,7 +90,7 @@ class KubernetesDeploymentManager(DeploymentManager):
         # For each service/component in the deployment, upload it to the API store
         self._upload_pipeline(
             pipeline=deployment.pipeline or deployment.namespace,
-            services=deployment.services,
+            entry_service=deployment.entry_service,
             **kwargs,
         )
 

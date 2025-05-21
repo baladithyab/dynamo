@@ -109,11 +109,12 @@ class Env:
 
 @dataclass
 class Service:
-    """A single component."""
+    """The entry service of a deployment."""
 
+    service_name: str
     name: str
     namespace: str
-    id: str | None = None
+    version: str
     cmd: t.List[str] = field(default_factory=list)
     resources: Resources | None = None
     envs: t.List[Env] = field(default_factory=list)
@@ -130,7 +131,7 @@ class Deployment:
     name: str
     namespace: str
     pipeline: t.Optional[str] = None
-    services: t.Optional[t.List[Service]] = None
+    entry_service: t.Optional[Service] = None
     envs: t.Optional[t.List[dict]] = None
 
 

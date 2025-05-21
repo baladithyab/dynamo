@@ -31,7 +31,6 @@ from dynamo.sdk.core.protocol.deployment import (
     Deployment,
     DeploymentManager,
     DeploymentResponse,
-    Service,
 )
 from dynamo.sdk.core.runner import TargetEnum
 
@@ -135,41 +134,13 @@ def _handle_deploy_create(
     """
 
     from dynamo.sdk.cli.utils import configure_target_environment
-    from dynamo.sdk.lib.loader import load_built_services
+    from dynamo.sdk.lib.loader import load_entry_service
 
     # TODO: hardcoding this is a hack to get the services for the deployment
     # we should find a better way to do this once build is finished/generic
     configure_target_environment(TargetEnum.BENTO)
-    pipeline_services = load_built_services(pipeline)
-    print("pipeline_services", pipeline_services)
-
-    def print_service_details(svc):
-        print(f"Service: {svc.name}")
-        print(f"  service namespace: {svc.config['dynamo']['namespace']}")
-        print(f"  service envs: {svc.envs}")
-        print(f"  service apis: {svc.get_bentoml_service().apis}")
-        print(f"  service size_bytes: {getattr(svc, 'size_bytes', 0)}")
-        print(f"  Config: {dict(svc.config)}")
-        print(f"  Endpoints: {svc.list_endpoints()}")
-        print(f"  Dependencies: {list(svc.dependencies.keys())}")
-        print("-" * 40)
-
-    for svc in pipeline_services.values():
-        print_service_details(svc)
-
-    services_for_deployment = [
-        Service(
-            name=svc.name,
-            namespace=svc.config["dynamo"]["namespace"],
-            envs=svc.envs,  # TODO: this isn't working yet, it's currently blank
-            apis=svc.list_endpoints(),  # TODO: this isn't working yet, it's currently blank
-            size_bytes=getattr(
-                svc, "size_bytes", 0
-            ),  # TODO: this isn't working yet, it's currently 0
-            # TODO: add the rest later
-        )
-        for svc in pipeline_services.values()
-    ]
+    entry_service = load_entry_service(pipeline)
+    print("entry_service", entry_service)
 
     deployment_manager = get_deployment_manager(target, endpoint)
     env_dicts = _build_env_dicts(config_file=config_file, args=ctx.args, envs=envs)
@@ -177,7 +148,7 @@ def _handle_deploy_create(
         name=name or (pipeline if pipeline else "unnamed-deployment"),
         namespace="default",
         pipeline=pipeline,
-        services=services_for_deployment,
+        entry_service=entry_service,
         envs=env_dicts,
     )
     try:

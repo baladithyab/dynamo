@@ -21,16 +21,12 @@ import importlib
 import logging
 import os
 import sys
-from typing import Dict, Optional, TypeVar
+from typing import Optional, TypeVar
 
 import yaml
 
-from dynamo.sdk.core.lib import get_target
-from dynamo.sdk.core.protocol.interface import (
-    DynamoConfig,
-    ServiceConfig,
-    ServiceInterface,
-)
+from dynamo.sdk.core.protocol.deployment import Service
+from dynamo.sdk.core.protocol.interface import ServiceConfig, ServiceInterface
 from dynamo.sdk.lib.service import DynamoService
 
 logger = logging.getLogger(__name__)
@@ -201,12 +197,22 @@ def _do_import(import_str: str, working_dir: str) -> DynamoService:
     return instance
 
 
-def load_built_services(
+def _get_dir_size(path: str) -> int:
+    total = 0
+    for dirpath, _, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if os.path.isfile(fp):
+                total += os.path.getsize(fp)
+    print(f"Total size of {path}: {total} bytes")
+    return total
+
+
+def load_entry_service(
     pipeline_tag: str, build_dir: str = "~/bentoml/bentos"
-) -> Dict[str, ServiceInterface]:
+) -> Service:
     """
-    Given a built pipeline tag (e.g. frontend:2uk2fwzvqsswvs7t), load all dynamo service classes from the built graph as ServiceInterface instances.
-    Returns a dict mapping service name to the instantiated ServiceInterface object.
+    Given a built pipeline tag (e.g. frontend:2uk2fwzvqsswvs7t), load the entry service as a deployment Service instance.
     """
     if ":" not in pipeline_tag:
         raise ValueError("pipeline_tag must be in the form name:version")
@@ -228,15 +234,18 @@ def load_built_services(
     if src_dir not in sys.path:
         sys.path.insert(0, src_dir)
 
+    # Compute size_bytes as the total size of the bento directory
+    size_bytes = _get_dir_size(graph_dir)
+
     # Import the main module
-    module_name, _ = graph_cfg.get("service", "").split(":", 1)
+    service_name = graph_cfg.get("service")
+    module_name, _ = service_name.split(":", 1)
     module = importlib.import_module(module_name)
 
-    # Use the current DeploymentTarget to instantiate all services as ServiceInterface
-    target = get_target()
-    services = {}
     for svc in graph_cfg.get("services", []):
         svc_name = svc["name"]
+        if svc_name != graph_cfg.get("entry_service"):
+            continue
         svc_class = getattr(module, svc_name, None)
         if svc_class is None:
             raise ImportError(
@@ -246,8 +255,14 @@ def load_built_services(
         if isinstance(svc_class, ServiceInterface):
             svc_class = svc_class.inner
         config = ServiceConfig(svc.get("config", {}))
-        dynamo_config = (
-            DynamoConfig(**config.get("dynamo", {})) if "dynamo" in config else None
+        entry_service = Service(
+            service_name=service_name,
+            name=svc_name,
+            namespace="default",
+            version=version,
+            envs=graph_cfg.get("envs", []),
+            apis=config.get("api_endpoints", []),
+            size_bytes=size_bytes,
         )
-        services[svc_name] = target.create_service(svc_class, config, dynamo_config)
-    return services
+        return entry_service
+    raise ValueError("No entry service found in the pipeline")
