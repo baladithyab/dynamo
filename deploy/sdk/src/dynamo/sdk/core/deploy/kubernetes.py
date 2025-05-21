@@ -125,8 +125,8 @@ class KubernetesDeploymentManager(DeploymentManager):
             resp.raise_for_status()
             return resp.json()
         except requests.HTTPError as e:
-            status = e.response.status_code if e.response else None
-            msg = e.response.text if e.response else str(e)
+            status = e.response.status_code if e.response is not None else None
+            msg = e.response.text if e.response is not None else str(e)
             raise RuntimeError((status, msg, url))
 
     def update_deployment(
@@ -153,8 +153,8 @@ class KubernetesDeploymentManager(DeploymentManager):
             resp = self.session.put(url, json=payload)
             resp.raise_for_status()
         except requests.HTTPError as e:
-            status = e.response.status_code if e.response else None
-            msg = e.response.text if e.response else str(e)
+            status = e.response.status_code if e.response is not None else None
+            msg = e.response.text if e.response is not None else str(e)
             raise RuntimeError((status, msg, url))
 
     def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
@@ -165,8 +165,8 @@ class KubernetesDeploymentManager(DeploymentManager):
             resp.raise_for_status()
             return resp.json()
         except requests.HTTPError as e:
-            status = e.response.status_code if e.response else None
-            msg = e.response.text if e.response else str(e)
+            status = e.response.status_code if e.response is not None else None
+            msg = e.response.text if e.response is not None else str(e)
             raise RuntimeError((status, msg, url))
 
     def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
@@ -178,7 +178,7 @@ class KubernetesDeploymentManager(DeploymentManager):
             data = resp.json()
             return data.get("items", [])
         except requests.HTTPError as e:
-            msg = e.response.text if e.response else str(e)
+            msg = e.response.text if e.response is not None else str(e)
             raise RuntimeError(
                 (e.response.status_code if e.response else None, msg, url)
             )
@@ -190,8 +190,8 @@ class KubernetesDeploymentManager(DeploymentManager):
             resp = self.session.delete(url)
             resp.raise_for_status()
         except requests.HTTPError as e:
-            status = e.response.status_code if e.response else None
-            msg = e.response.text if e.response else str(e)
+            status = e.response.status_code if e.response is not None else None
+            msg = e.response.text if e.response is not None else str(e)
             raise RuntimeError((status, msg, url))
 
     def get_status(

@@ -216,7 +216,9 @@ def _handle_deploy_create(
             if status == 409:
                 console.print(
                     Panel(
-                        f"Deployment already exists.\n{msg}", title="Error", style="red"
+                        f"Cannot create deployment because deployment with name '{name}' already exists.",
+                        title="Error",
+                        style="red",
                     )
                 )
             elif status in (400, 422):
@@ -225,9 +227,7 @@ def _handle_deploy_create(
                 )
             elif status == 404:
                 console.print(
-                    Panel(
-                        f"Endpoint not found: {url}\n{msg}", title="Error", style="red"
-                    )
+                    Panel(f"Endpoint not found: {url}", title="Error", style="red")
                 )
             elif status == 500:
                 console.print(
@@ -443,7 +443,7 @@ def delete(
             if status == 404:
                 console.print(
                     Panel(
-                        f"Deployment '{name}' not found.\n{msg}",
+                        f"Deployment '{name}' not found.",
                         title="Error",
                         style="red",
                     )
