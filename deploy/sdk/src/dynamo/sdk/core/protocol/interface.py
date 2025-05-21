@@ -164,7 +164,7 @@ class LeaseConfig:
     ttl: int = 1  # seconds
 
 
-class ComponentType(str, Enum):
+class ComponentType:
     """Types of Dynamo components"""
 
     PLANNER = "planner"
@@ -178,9 +178,7 @@ class DynamoConfig:
     name: str | None = None
     namespace: str | None = None
     custom_lease: LeaseConfig | None = None
-    component_type: ComponentType | None = (
-        None  # Indicates if this is a meta/system component
-    )
+    component_type: str | None = None  # Indicates if this is a meta/system component
 
 
 class DeploymentTarget(ABC):
