@@ -28,8 +28,8 @@ from circus.sockets import CircusSocket
 from circus.watcher import Watcher
 from fastapi import FastAPI
 
-from dynamo.deploy.sdk.src.dynamo.sdk.core.protocol.deployment import Env
 from dynamo.sdk.core.decorators.endpoint import DynamoClient, DynamoEndpoint
+from dynamo.sdk.core.protocol.deployment import Env
 from dynamo.sdk.core.protocol.interface import (
     DependencyInterface,
     DeploymentTarget,
