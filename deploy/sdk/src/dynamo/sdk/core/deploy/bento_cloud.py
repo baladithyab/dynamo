@@ -127,7 +127,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
                     raise RuntimeError(
                         (500, "Deployment did not become ready in time.", None)
                     )
-            return deployment_obj
+            return deployment_obj.to_dict()
         except BentoMLException as e:
             error_msg = str(e)
             if "already exists" in error_msg:
@@ -150,18 +150,14 @@ class BentoCloudDeploymentManager(DeploymentManager):
             deployment = self._cloud_client.deployment.update(
                 deployment_config_params=config_params
             )
-            return deployment
+            return deployment.to_dict()
         except BentoMLException as e:
             raise RuntimeError((500, f"Deployment update error: {str(e)}", None))
 
     def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
         try:
             deployment_obj = self._cloud_client.deployment.get(name=deployment_id)
-            return (
-                deployment_obj.to_dict()
-                if hasattr(deployment_obj, "to_dict")
-                else vars(deployment_obj)
-            )
+            return deployment_obj.to_dict()
         except BentoMLException as e:
             error_msg = str(e)
             raise RuntimeError((404, error_msg, None))
@@ -217,7 +213,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
             elif status == DeploymentStatus.FAILED:
                 return False
             time.sleep(5)
-        return False
+        raise TimeoutError("Deployment did not become ready in time")
 
     def get_endpoint_urls(
         self,

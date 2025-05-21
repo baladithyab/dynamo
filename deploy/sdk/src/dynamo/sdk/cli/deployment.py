@@ -55,7 +55,7 @@ def get_deployment_manager(target: str, endpoint: str) -> DeploymentManager:
 
 
 def display_deployment_info(
-    deployment_manager: DeploymentManager, deployment: dict[str, t.Any]
+    deployment_manager: DeploymentManager, deployment: DeploymentResponse
 ) -> None:
     """Display deployment summary, status, and endpoint URLs using rich panels."""
     name = deployment.get("name") or deployment.get("uid") or deployment.get("id")
@@ -182,35 +182,34 @@ def _handle_deploy_create(
     )
     try:
         console.print("[bold green]Creating deployment...")
-        deployment_id = deployment_manager.create_deployment(
+        deployment = deployment_manager.create_deployment(
             deployment,
             wait=wait,
             timeout=timeout,
             dev=dev,
         )
-        console.print(
-            f"[bold green]Deployment '{deployment_id}' created. Waiting for status..."
-        )
+        console.print(f"[bold green]Deployment '{name}' created. Waiting for status...")
         if wait:
-            ready = deployment_manager.wait_until_ready(deployment_id, timeout=timeout)
+            ready = deployment_manager.wait_until_ready(name, timeout=timeout)
             if ready:
                 console.print(
                     Panel(
-                        f"Deployment [bold]{deployment_id}[/] is [green]ready[/]",
+                        f"Deployment [bold]{name}[/] is [green]ready[/]",
                         title="Status",
                     )
                 )
             else:
                 console.print(
                     Panel(
-                        f"Deployment [bold]{deployment_id}[/] did not become ready in time.",
+                        f"Deployment [bold]{name}[/] did not become ready in time.",
                         title="Status",
                         style="red",
                     )
                 )
-        display_deployment_info(deployment_manager, deployment_id)
+        display_deployment_info(deployment_manager, deployment)
         return deployment
     except Exception as e:
+        print(e.__dict__)
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
             if status == 409:
@@ -227,7 +226,7 @@ def _handle_deploy_create(
                 )
             elif status == 404:
                 console.print(
-                    Panel(f"Endpoint not found: {url}", title="Error", style="red")
+                    Panel(f"Not found: {url} \n{msg}", title="Error", style="red")
                 )
             elif status == 500:
                 console.print(
