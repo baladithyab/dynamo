@@ -131,8 +131,8 @@ class BentoCloudDeploymentManager(DeploymentManager):
         except BentoMLException as e:
             error_msg = str(e)
             if "already exists" in error_msg:
-                raise RuntimeError((409, error_msg, None))
-            raise RuntimeError((500, error_msg, None))
+                raise RuntimeError((409, error_msg, None)) from e
+            raise RuntimeError((500, error_msg, None)) from e
 
     def update_deployment(
         self, deployment_id: str, deployment: ProtocolDeployment
@@ -152,15 +152,15 @@ class BentoCloudDeploymentManager(DeploymentManager):
             )
             return deployment.to_dict()
         except BentoMLException as e:
-            raise RuntimeError((500, f"Deployment update error: {str(e)}", None))
+            raise RuntimeError((500, f"Deployment update error: {str(e)}", None)) from e
 
-    def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
+    def get_deployment(self, deployment_id: str) -> DeploymentResponse:
         try:
             deployment_obj = self._cloud_client.deployment.get(name=deployment_id)
             return deployment_obj.to_dict()
         except BentoMLException as e:
             error_msg = str(e)
-            raise RuntimeError((404, error_msg, None))
+            raise RuntimeError((404, error_msg, None)) from e
 
     def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
         try:
@@ -170,14 +170,14 @@ class BentoCloudDeploymentManager(DeploymentManager):
             ]
         except BentoMLException as e:
             error_msg = str(e)
-            raise RuntimeError((500, error_msg, None))
+            raise RuntimeError((500, error_msg, None)) from e
 
     def delete_deployment(self, deployment_id: str, **kwargs) -> None:
         try:
             self._cloud_client.deployment.delete(name=deployment_id)
         except BentoMLException as e:
             error_msg = str(e)
-            raise RuntimeError((404, error_msg, None))
+            raise RuntimeError((404, error_msg, None)) from e
 
     def get_status(
         self,

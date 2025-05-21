@@ -115,6 +115,7 @@ class Service:
     name: str
     namespace: str
     version: str
+    path: str
     cmd: t.List[str] = field(default_factory=list)
     resources: Resources | None = None
     envs: t.List[Env] = field(default_factory=list)
@@ -143,14 +144,11 @@ class DeploymentManager(ABC):
     """Interface for managing dynamo graph deployments."""
 
     @abstractmethod
-    def create_deployment(
-        self, deployment: Deployment, pipeline: t.Optional[str], **kwargs
-    ) -> DeploymentResponse:
+    def create_deployment(self, deployment: Deployment, **kwargs) -> DeploymentResponse:
         """Create new deployment.
 
         Args:
             deployment: Deployment configuration
-            pipeline: Pipeline name (tag result of `dynamo build`). If not provided, the namespace of the deployment will be used.
             **kwargs: Additional backend-specific arguments
 
         Returns:
@@ -159,25 +157,21 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def update_deployment(
-        self, deployment_id: str, deployment: Deployment, **kwargs
-    ) -> None:
+    def update_deployment(self, deployment_id: str, deployment: Deployment) -> None:
         """Update an existing deployment.
 
         Args:
             deployment_id: The ID of the deployment to update
             deployment: New deployment configuration
-            **kwargs: Additional backend-specific arguments
         """
         pass
 
     @abstractmethod
-    def get_deployment(self, deployment_id: str, **kwargs) -> DeploymentResponse:
+    def get_deployment(self, deployment_id: str) -> DeploymentResponse:
         """Get deployment details.
 
         Args:
             deployment_id: The ID of the deployment
-            **kwargs: Additional backend-specific arguments
 
         Returns:
             Dictionary containing deployment details

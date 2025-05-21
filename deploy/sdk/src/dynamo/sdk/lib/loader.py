@@ -26,7 +26,7 @@ from typing import Optional, TypeVar
 import yaml
 
 from dynamo.sdk.core.protocol.deployment import Service
-from dynamo.sdk.core.protocol.interface import ServiceConfig, ServiceInterface
+from dynamo.sdk.core.protocol.interface import ServiceInterface
 from dynamo.sdk.lib.service import DynamoService
 
 logger = logging.getLogger(__name__)
@@ -254,14 +254,14 @@ def load_entry_service(
         # If already a ServiceInterface, get the inner class
         if isinstance(svc_class, ServiceInterface):
             svc_class = svc_class.inner
-        config = ServiceConfig(svc.get("config", {}))
         entry_service = Service(
             service_name=service_name,
             name=svc_name,
             namespace="default",
             version=version,
+            path=graph_dir,
             envs=graph_cfg.get("envs", []),
-            apis=config.get("api_endpoints", []),
+            apis={},
             size_bytes=size_bytes,
         )
         return entry_service
