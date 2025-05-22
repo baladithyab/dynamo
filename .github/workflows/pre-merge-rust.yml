@@ -35,33 +35,7 @@ on:
     - 'Cargo.lock'
 
 jobs:
-  pre-merge-rust:
-    runs-on:
-        group: Fastchecker
-    strategy:
-      matrix:
-        framework:
-          - vllm
-    permissions:
-      contents: read
-    outputs:
-      image_tag: ${{ steps.define_image_tag.outputs.image_tag }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Define Image Tag
-      id: define_image_tag
-      run: |
-        echo "image_tag=dynamo:latest-${{ matrix.framework }}" >> $GITHUB_OUTPUT
-    - name: Build image
-      env:
-        GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
-      run: |
-        ./container/build.sh --tag ${{ steps.define_image_tag.outputs.image_tag }} --target ci_minimum --framework ${{ matrix.framework }}
-
   run-rust-tests:
-    needs: pre-merge-rust
     runs-on:
         group: Fastchecker
     strategy:
@@ -83,9 +57,16 @@ jobs:
       contents: read
     env:
       CONTAINER_ID: test_${{ github.run_id }}_${{ github.run_attempt }}_${{ github.job }}_${{ matrix.framework }}_${{ matrix.dir }}
-      IMAGE_TAG: ${{ needs.pre-merge-rust.outputs.image_tag }}
+      IMAGE_TAG: dynamo:latest-${{ matrix.framework }}-${{ github.run_id }}
     steps:
     - uses: actions/checkout@v4
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Build image
+      env:
+        GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+      run: |
+        ./container/build.sh --tag ${{ env.IMAGE_TAG }} --target ci_minimum --framework ${{ matrix.framework }}
     - name: Run all Rust tests in container
       working-directory: ${{ matrix.dir }}
       run: |
