@@ -12,20 +12,17 @@ import argparse
 import asyncio
 import logging
 import sys
-from typing import Optional
-
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
-
-# Import TRTLLM and related modules
-from tensorrt_llm import LLM, SamplingParams, LlmArgs
-from tensorrt_llm.llmapi.tokenizer import tokenizer_factory
-from tensorrt_llm.llmapi.llm_utils import update_llm_args_with_extra_options
 import uvloop
 
+# Import TRTLLM and related modules
+from tensorrt_llm import LLM, LlmArgs, SamplingParams
+from tensorrt_llm.llmapi.llm_utils import update_llm_args_with_extra_options
+from tensorrt_llm.llmapi.tokenizer import tokenizer_factory
 
-from dynamo.llm import KvEventPublisher, KvMetricsPublisher, ModelType, register_llm
+from dynamo.llm import KvMetricsPublisher, ModelType, register_llm
 from dynamo.runtime import DistributedRuntime, dynamo_worker
 
 # Only used if you run it manually from the command line
@@ -35,6 +32,7 @@ DEFAULT_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 
 
 logging.basicConfig(level=logging.DEBUG)
+
 
 class Config:
     """Command line parameters or defaults"""
@@ -59,7 +57,7 @@ class RequestHandler:
         self.component = component
         self.default_sampling_params = default_sampling_params
         self.metrics_publisher = KvMetricsPublisher()
-    
+
     def setup_kv_metrics(self):
         # Initially send dummy metrics to kick start,
         # vLLM will not update stat until forward pass is triggered
@@ -97,7 +95,9 @@ class RequestHandler:
 
         num_output_tokens_so_far = 0
         # TODO: Disable streaming for context only requests when adding disagg support
-        async for res in self.engine.llm.generate_async(inputs=inputs, sampling_params=sampling_params, streaming=True):
+        async for res in self.engine.llm.generate_async(
+            inputs=inputs, sampling_params=sampling_params, streaming=True
+        ):
             if res.finished:
                 yield {"finish_reason": "stop", "token_ids": []}
                 break
@@ -121,6 +121,7 @@ class RequestHandler:
 async def worker(runtime: DistributedRuntime):
     await init(runtime, cmd_line_args())
 
+
 class AsyncLLMEngine:
     def __init__(self, engine_args):
         self.engine_args = engine_args
@@ -130,7 +131,10 @@ class AsyncLLMEngine:
     async def initialize(self):
         if not self._initialized:
             model = self.engine_args.pop("model")
-            self._llm = LLM(model=model, **self.engine_args,)
+            self._llm = LLM(
+                model=model,
+                **self.engine_args,
+            )
             self._initialized = True
 
     async def cleanup(self):
@@ -160,6 +164,7 @@ async def get_llm_engine(engine_args: LlmArgs) -> AsyncGenerator[AsyncLLMEngine,
         raise
     finally:
         await engine.cleanup()
+
 
 async def init(runtime: DistributedRuntime, config: Config):
     """
@@ -192,7 +197,7 @@ async def init(runtime: DistributedRuntime, config: Config):
 
     logging.debug(f"TRTLLM engine args: {arg_map}")
     engine_args = arg_map
-    
+
     # Populate default sampling params from the model
     tokenizer = tokenizer_factory(arg_map["model"])
     default_sampling_params = SamplingParams()
@@ -206,6 +211,7 @@ async def init(runtime: DistributedRuntime, config: Config):
         # the server will gracefully shutdown (i.e., keep opened TCP streams finishes)
         # after the lease is revoked
         await endpoint.serve_endpoint(handler.generate)
+
 
 def cmd_line_args():
     parser = argparse.ArgumentParser(
