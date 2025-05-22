@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # TODO:
-# - Add event and metrics publish
+# - Add event and metrics publishers
 # - Support default dynamo-run out=trtllm launch
 # - Support disaggregated serving
 #
-# `dynamo-run out=trtllm` runs this script
-# Can also be used standalone: `python3 trtllm_inc.py` - lots of optional cmd line params
+# Can be used standalone: `python3 trtllm_inc.py` - lots of optional cmd line params
 
 import argparse
 import asyncio
@@ -83,8 +82,6 @@ class RequestHandler:
         await self.metrics_publisher.create_endpoint(self.component)
 
     async def generate(self, request):
-        logging.debug(f"Received request: {request}")
-
         inputs = request["token_ids"]
 
         sampling_params = self.default_sampling_params
@@ -99,7 +96,7 @@ class RequestHandler:
             sampling_params.max_tokens = max_tokens
 
         num_output_tokens_so_far = 0
-        # TODO: Disable for context only requests
+        # TODO: Disable streaming for context only requests when adding disagg support
         async for res in self.engine.llm.generate_async(inputs=inputs, sampling_params=sampling_params, streaming=True):
             if res.finished:
                 yield {"finish_reason": "stop", "token_ids": []}
@@ -201,9 +198,6 @@ async def init(runtime: DistributedRuntime, config: Config):
     default_sampling_params = SamplingParams()
     default_sampling_params._setup(tokenizer)
     default_sampling_params.stop = None
-
-    # engine_context = build_async_engine_client_from_engine_args(engine_args)
-    # engine_client = await engine_context.__aenter__()
 
     async with get_llm_engine(engine_args) as engine:
         handler = RequestHandler(component, engine, default_sampling_params)
