@@ -56,7 +56,7 @@ jobs:
     permissions:
       contents: read
     env:
-      CONTAINER_ID: test_${{ github.run_id }}_${{ github.run_attempt }}_${{ github.job }}_${{ matrix.framework }}_${{ matrix.dir }}
+      CONTAINER_ID: test_${{ github.run_id }}_${{ github.run_attempt }}_${{ github.job }}_${{ matrix.framework }}_${{ strategy.job-index }}
       IMAGE_TAG: dynamo:latest-${{ matrix.framework }}-${{ github.run_id }}
     steps:
     - uses: actions/checkout@v4
