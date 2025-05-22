@@ -25,6 +25,7 @@ def mock_kube_api():
     mock_api = Mock()
     mock_api.get_graph_deployment = AsyncMock()
     mock_api.update_graph_replicas = AsyncMock()
+    mock_api.wait_for_graph_deployment_ready = AsyncMock()
     return mock_api
 
 
@@ -65,6 +66,9 @@ async def test_add_component_increases_replicas(kubernetes_connector, mock_kube_
     mock_kube_api.update_graph_replicas.assert_called_once_with(
         "test-graph", component_name, 2
     )
+    mock_kube_api.wait_for_graph_deployment_ready.assert_called_once_with(
+        "test-graph"
+    )
 
 
 @pytest.mark.asyncio
@@ -85,6 +89,9 @@ async def test_add_component_with_no_replicas_specified(
     # Assert
     mock_kube_api.update_graph_replicas.assert_called_once_with(
         "test-graph", component_name, 2
+    )
+    mock_kube_api.wait_for_graph_deployment_ready.assert_called_once_with(
+        "test-graph"
     )
 
 
