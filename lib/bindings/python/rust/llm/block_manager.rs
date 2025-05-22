@@ -35,7 +35,7 @@ pub fn add_to_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyclass]
 pub struct BlockManager {
     // TODO: Can this be implicitly created and referenced?
-    tokio_runtime: tokio::runtime::Runtime,
+    _tokio_runtime: tokio::runtime::Runtime,
     // Block manager
     inner: Arc<dynamo_llm::block_manager::ReferenceBlockManager>,
     // TODO: Metadata should be stored in the block manager?
@@ -47,6 +47,7 @@ pub struct BlockManager {
 impl BlockManager {
     #[new]
     #[pyo3(signature = (worker_id, num_layer, outer_dim, page_size, inner_dim, dtype=None, host_num_blocks=None, device_num_blocks=None, device_id=0))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         worker_id: u64,
         num_layer: usize,
@@ -92,7 +93,7 @@ impl BlockManager {
                 }
             };
         }
-        model_config = model_config.dtype(dtype_.clone());
+        model_config = model_config.dtype(dtype_);
         config = config.model(model_config.build().unwrap());
         if let Some(host_num_blocks) = host_num_blocks {
             config = config.host_layout(
@@ -124,10 +125,10 @@ impl BlockManager {
             dynamo_llm::block_manager::ReferenceBlockManager::new(config).unwrap()
         });
         Ok(BlockManager {
-            tokio_runtime: tokio_runtime,
+            _tokio_runtime: tokio_runtime,
             inner: Arc::from(block_manager),
             dtype: dtype_,
-            device_id: device_id,
+            device_id,
         })
     }
 
@@ -139,13 +140,10 @@ impl BlockManager {
             .allocate_blocks_blocking(count)
             .unwrap();
         // Wrap each block in an enum accounting for Pinned & Device block
-        let blocks = blocks
-            .into_iter()
-            .map(|b| block::BlockType::Pinned(b))
-            .collect();
+        let blocks = blocks.into_iter().map(block::BlockType::Pinned).collect();
         Ok(block_list::BlockList::from_rust(
             blocks,
-            self.dtype.clone(),
+            self.dtype,
             self.device_id,
         ))
     }
@@ -158,13 +156,10 @@ impl BlockManager {
             .allocate_blocks_blocking(count)
             .unwrap();
         // Wrap each block in an enum accounting for Pinned & Device block
-        let blocks = blocks
-            .into_iter()
-            .map(|b| block::BlockType::Device(b))
-            .collect();
+        let blocks = blocks.into_iter().map(block::BlockType::Device).collect();
         Ok(block_list::BlockList::from_rust(
             blocks,
-            self.dtype.clone(),
+            self.dtype,
             self.device_id,
         ))
     }

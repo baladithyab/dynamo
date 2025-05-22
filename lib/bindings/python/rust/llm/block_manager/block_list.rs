@@ -43,8 +43,8 @@ impl BlockList {
                 .into_iter()
                 .map(|b| Arc::new(Mutex::new(b)))
                 .collect(),
-            dtype: dtype,
-            device_id: device_id,
+            dtype,
+            device_id,
             py_itr_idx: 0,
         }
     }
@@ -57,7 +57,7 @@ impl BlockList {
             let blocks: Vec<block::Block> = self
                 .inner
                 .iter()
-                .map(|b| block::Block::from_rust(b.clone(), self.dtype.clone(), self.device_id))
+                .map(|b| block::Block::from_rust(b.clone(), self.dtype, self.device_id))
                 .collect();
             PyList::new(py, blocks).unwrap().unbind()
         });
@@ -76,11 +76,7 @@ impl BlockList {
                 self.inner.len()
             )));
         }
-        let block = block::Block::from_rust(
-            self.inner[index].clone(),
-            self.dtype.clone(),
-            self.device_id,
-        );
+        let block = block::Block::from_rust(self.inner[index].clone(), self.dtype, self.device_id);
         Ok(block)
     }
 
@@ -102,7 +98,7 @@ impl BlockList {
         }
         let block = block::Block::from_rust(
             self.inner[self.py_itr_idx].clone(),
-            self.dtype.clone(),
+            self.dtype,
             self.device_id,
         );
         self.py_itr_idx += 1;

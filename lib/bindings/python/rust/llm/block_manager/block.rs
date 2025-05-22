@@ -155,8 +155,8 @@ impl Block {
     ) -> Self {
         Self {
             inner: block,
-            dtype: dtype,
-            device_id: device_id,
+            dtype,
+            device_id,
         }
     }
 }
@@ -188,7 +188,7 @@ impl Block {
         // Create DLPack PyCapsule
         let manager_ctx = ManagerCtx::new(DlPackTensor {
             block: self.inner.clone(),
-            dtype: self.dtype.clone(),
+            dtype: self.dtype,
             device_id: self.device_id,
         });
         let py_capsule = Python::with_gil(|py| manager_ctx.into_py(py));

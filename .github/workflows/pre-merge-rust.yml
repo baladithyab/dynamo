@@ -67,31 +67,35 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
       run: |
         ./container/build.sh --tag ${{ env.IMAGE_TAG }} --target ci_minimum --framework ${{ matrix.framework }}
-    - name: Run all Rust tests in container
-      working-directory: ${{ matrix.dir }}
+    - name: Start container
       run: |
-        # Start container and keep it running
         docker run -d --name ${{ env.CONTAINER_ID }} ${{ env.IMAGE_TAG }} tail -f /dev/null
 
-        # Run all tests in the same container
-        echo "Running Cargo Check..."
+    - name: Run Cargo Check
+      run: |
         docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} cargo check --locked ${{ matrix.args }}
 
-        echo "Running Code Formatting Check..."
+    - name: Run Code Formatting Check
+      run: |
         docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "rustup component add rustfmt && cargo fmt -- --check"
 
-        echo "Running Clippy Checks..."
+    - name: Run Clippy Checks
+      run: |
         docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "rustup component add clippy && cargo clippy --no-deps ${{ matrix.args }} -- -D warnings"
 
-        echo "Running cargo-deny..."
+    - name: Run cargo-deny
+      run: |
         docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "cargo-deny --version || cargo install cargo-deny@0.16.4 && cargo-deny --no-default-features check --hide-inclusion-graph licenses bans --config /workspace/deny.toml"
 
-        echo "Running Doc Tests..."
+    - name: Run Doc Tests
+      run: |
         docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "cargo doc --no-deps ${{ matrix.args }} && cargo test --locked --doc ${{ matrix.args }}"
 
-        echo "Running Unit Tests..."
+    - name: Run Unit Tests
+      run: |
         docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} cargo test --locked ${{ matrix.args }}
 
-        # Stop and remove the container
+    - name: Stop and remove container
+      run: |
         docker stop ${{ env.CONTAINER_ID }}
         docker rm ${{ env.CONTAINER_ID }}
