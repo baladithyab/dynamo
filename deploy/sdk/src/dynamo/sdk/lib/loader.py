@@ -26,7 +26,6 @@ from typing import Optional, TypeVar
 import yaml
 
 from dynamo.sdk.core.protocol.deployment import Service
-from dynamo.sdk.core.protocol.interface import ServiceInterface
 from dynamo.sdk.lib.service import DynamoService
 
 logger = logging.getLogger(__name__)
@@ -237,23 +236,11 @@ def load_entry_service(
     # Compute size_bytes as the total size of the bento directory
     size_bytes = _get_dir_size(graph_dir)
 
-    # Import the main module
     service_name = graph_cfg.get("service")
-    module_name, _ = service_name.split(":", 1)
-    module = importlib.import_module(module_name)
-
     for svc in graph_cfg.get("services", []):
         svc_name = svc["name"]
         if svc_name != graph_cfg.get("entry_service"):
             continue
-        svc_class = getattr(module, svc_name, None)
-        if svc_class is None:
-            raise ImportError(
-                f"Dynamo service class '{svc_name}' not found in module '{module_name}'"
-            )
-        # If already a ServiceInterface, get the inner class
-        if isinstance(svc_class, ServiceInterface):
-            svc_class = svc_class.inner
         entry_service = Service(
             service_name=service_name,
             name=svc_name,
