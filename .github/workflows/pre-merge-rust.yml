@@ -36,7 +36,8 @@ on:
 
 jobs:
   pre-merge-rust:
-    runs-on: ubuntu-latest
+    runs-on:
+        group: Fastchecker
     strategy:
       matrix:
         framework:
@@ -61,7 +62,8 @@ jobs:
 
   run-rust-tests:
     needs: pre-merge-rust
-    runs-on: ubuntu-latest
+    runs-on:
+        group: Fastchecker
     strategy:
       matrix:
         include:
