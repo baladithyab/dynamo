@@ -38,55 +38,77 @@ jobs:
   pre-merge-rust:
     runs-on: ubuntu-latest
     strategy:
-      matrix: { dir: ['.', 'lib/bindings/python', 'lib/runtime/examples'] }
+      matrix:
+        framework:
+          - vllm
     permissions:
       contents: read
+    outputs:
+      image_tag: ${{ steps.define_image_tag.outputs.image_tag }}
     steps:
     - uses: actions/checkout@v4
-    - name: Set up system dependencies
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Define Image Tag
+      id: define_image_tag
       run: |
-        sudo apt-get update -y
-        sudo apt-get install -y protobuf-compiler
-    - name: Cache Cargo Registry
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ github.head_ref || github.ref_name }}-${{ hashFiles('**/Cargo.lock') }}
-    - name: Cache Cargo Tools
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/bin
-        key: ${{ runner.os }}-cargo-tools-${{ github.head_ref || github.ref_name }}-${{ hashFiles('**/Cargo.lock') }}
-    - name: Install Rust in dev environment
-      # Install Rust only to run GitHub Local Actions in (dev environment) using the `ACT` environment variable.
-      # See act usage: https://nektosact.com/introduction.html
-      # https://nektosact.com/usage/index.html?highlight=env.Act#skipping-steps
-      if: ${{ env.ACT }}
+        echo "image_tag=dynamo:latest-${{ matrix.framework }}" >> $GITHUB_OUTPUT
+    - name: Build image
+      env:
+        GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
       run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        rustup toolchain install 1.86.0-x86_64-unknown-linux-gnu
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-    - name: Set up Rust Toolchain Components
-      run: rustup component add rustfmt clippy
-    - name: Run Cargo Check
-      working-directory: ${{ matrix.dir }}
-      run: cargo check --locked
-      timeout-minutes: 5
-    - name: Verify Code Formatting
-      working-directory: ${{ matrix.dir }}
-      run: cargo fmt -- --check
-    - name: Run Clippy Checks
-      working-directory: ${{ matrix.dir }}
-      run: cargo clippy --no-deps --all-targets -- -D warnings
-    - name: Install and Run cargo-deny
+        ./container/build.sh --tag ${{ steps.define_image_tag.outputs.image_tag }} --target ci_minimum --framework ${{ matrix.framework }}
+
+  run-rust-tests:
+    needs: pre-merge-rust
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - dir: '.'
+            args: '--all-features'
+            framework: vllm
+          - dir: 'lib/bindings/python'
+            args: '--all-features'
+            framework: vllm
+          - dir: 'lib/runtime/examples'
+            args: '--all-features'
+            framework: vllm
+          - dir: 'lib/llm'
+            args: '--features block-manager'
+            framework: vllm
+    permissions:
+      contents: read
+    env:
+      CONTAINER_ID: test_${{ github.run_id }}_${{ github.run_attempt }}_${{ github.job }}_${{ matrix.framework }}_${{ matrix.dir }}
+      IMAGE_TAG: ${{ needs.pre-merge-rust.outputs.image_tag }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run all Rust tests in container
       working-directory: ${{ matrix.dir }}
       run: |
-        cargo-deny --version || cargo install cargo-deny@0.16.4
-        cargo-deny --no-default-features check --hide-inclusion-graph licenses bans --config ${{ github.workspace }}/deny.toml
-    - name: Run Doc Tests
-      working-directory: ${{ matrix.dir }}
-      run: cargo doc --no-deps && cargo test --locked --doc
-    - name: Run Unit Tests
-      working-directory: ${{ matrix.dir }}
-      # NOTE: --all-targets doesn't run doc tests
-      run: cargo test --locked --all-targets
+        # Start container and keep it running
+        docker run -d --name ${{ env.CONTAINER_ID }} ${{ env.IMAGE_TAG }} tail -f /dev/null
+
+        # Run all tests in the same container
+        echo "Running Cargo Check..."
+        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} cargo check --locked ${{ matrix.args }}
+
+        echo "Running Code Formatting Check..."
+        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "rustup component add rustfmt && cargo fmt -- --check"
+
+        echo "Running Clippy Checks..."
+        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "rustup component add clippy && cargo clippy --no-deps ${{ matrix.args }} -- -D warnings"
+
+        echo "Running cargo-deny..."
+        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "cargo-deny --version || cargo install cargo-deny@0.16.4 && cargo-deny --no-default-features check --hide-inclusion-graph licenses bans --config /workspace/deny.toml"
+
+        echo "Running Doc Tests..."
+        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} bash -c "cargo doc --no-deps ${{ matrix.args }} && cargo test --locked --doc ${{ matrix.args }}"
+
+        echo "Running Unit Tests..."
+        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} cargo test --locked ${{ matrix.args }}
+
+        # Stop and remove the container
+        docker stop ${{ env.CONTAINER_ID }}
+        docker rm ${{ env.CONTAINER_ID }}
