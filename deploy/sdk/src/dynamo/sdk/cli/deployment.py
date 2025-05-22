@@ -69,6 +69,8 @@ def display_deployment_info(
         summary += f"\n[white]Created:[/] [magenta]{created_at}[/]"
     if urls:
         summary += f"\n[white]URLs:[/] [blue]{' | '.join(urls)}[/]"
+    else:
+        summary += "\n[white]URLs:[/] [blue]None[/]"
     console.print(Panel(summary, title="Deployment", style="cyan"))
 
 

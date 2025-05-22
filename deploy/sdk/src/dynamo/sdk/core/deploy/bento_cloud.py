@@ -213,7 +213,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
             elif status == DeploymentStatus.FAILED:
                 return False
             time.sleep(5)
-        raise TimeoutError("Deployment did not become ready in time")
+        return False
 
     def get_endpoint_urls(
         self,

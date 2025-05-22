@@ -77,11 +77,11 @@ class DeploymentStatus(str, Enum):
     """Status of a dynamo deployment."""
 
     PENDING = "pending"
-    IN_PROGRESS = "in_progress"
+    IN_PROGRESS = "in progress"
     RUNNING = "running"
     FAILED = "failed"
     TERMINATED = "terminate"
-    SCALED_TO_ZERO = "scaled_to_zero"
+    SCALED_TO_ZERO = "scaled to zero"
 
     @property
     def color(self) -> str:
