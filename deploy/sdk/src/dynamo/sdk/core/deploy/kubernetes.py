@@ -105,11 +105,11 @@ class KubernetesDeploymentManager(DeploymentManager):
         if not build_dir or not os.path.isdir(build_dir):
             raise FileNotFoundError(f"Built pipeline directory not found: {build_dir}")
         tar_stream = io.BytesIO()
-        with tarfile.open(fileobj=tar_stream, mode="w:gz") as tar:
+        with tarfile.open(fileobj=tar_stream, mode="w") as tar:
             tar.add(build_dir, arcname=".")
         tar_stream.seek(0)
         upload_url = f"{endpoint}/api/v1/dynamo_components/{pipeline_name}/versions/{pipeline_version}/upload"
-        upload_headers = {"Content-Type": "application/gzip"}
+        upload_headers = {"Content-Type": "application/x-tar"}
         resp = session.put(upload_url, data=tar_stream, headers=upload_headers)
         if resp.status_code not in (200, 201, 204):
             raise RuntimeError(f"Failed to upload pipeline artifact: {resp.text}")
