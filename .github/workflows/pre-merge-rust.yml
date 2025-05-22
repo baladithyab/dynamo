@@ -73,7 +73,7 @@ jobs:
 
     - name: Run Cargo Check
       run: |
-        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} cargo check --locked ${{ matrix.args }}
+        docker exec -w /workspace/${{ matrix.dir }} ${{ env.CONTAINER_ID }} cargo check --locked
 
     - name: Run Code Formatting Check
       run: |
