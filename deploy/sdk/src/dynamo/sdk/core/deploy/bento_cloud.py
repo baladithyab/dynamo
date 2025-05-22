@@ -101,8 +101,6 @@ class BentoCloudDeploymentManager(DeploymentManager):
     def create_deployment(
         self, deployment: ProtocolDeployment, **kwargs
     ) -> DeploymentResponse:
-        wait = kwargs.get("wait", True)
-        timeout = kwargs.get("timeout", 3600)
         dev = kwargs.get("dev", False)
 
         config_params = DeploymentConfigParameters(
@@ -121,12 +119,6 @@ class BentoCloudDeploymentManager(DeploymentManager):
             deployment_obj = self._cloud_client.deployment.create(
                 deployment_config_params=config_params
             )
-            if wait:
-                retcode = deployment_obj.wait_until_ready(timeout=timeout)
-                if retcode != 0:
-                    raise RuntimeError(
-                        (500, "Deployment did not become ready in time.", None)
-                    )
             return deployment_obj.to_dict()
         except BentoMLException as e:
             error_msg = str(e)
@@ -162,7 +154,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
             error_msg = str(e)
             raise RuntimeError((404, error_msg, None)) from e
 
-    def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
+    def list_deployments(self) -> list[DeploymentResponse]:
         try:
             deployments = self._cloud_client.deployment.list()
             return [
@@ -172,7 +164,7 @@ class BentoCloudDeploymentManager(DeploymentManager):
             error_msg = str(e)
             raise RuntimeError((500, error_msg, None)) from e
 
-    def delete_deployment(self, deployment_id: str, **kwargs) -> None:
+    def delete_deployment(self, deployment_id: str) -> None:
         try:
             self._cloud_client.deployment.delete(name=deployment_id)
         except BentoMLException as e:
@@ -181,16 +173,12 @@ class BentoCloudDeploymentManager(DeploymentManager):
 
     def get_status(
         self,
-        deployment_id: t.Optional[str] = None,
-        deployment: t.Optional[DeploymentResponse] = None,
+        deployment_id: str,
     ) -> DeploymentStatus:
-        if deployment_id:
-            dep = self.get_deployment(deployment_id)
-        elif deployment:
-            dep = deployment
-        else:
-            raise ValueError("Either deployment_id or deployment must be provided")
-        status = dep["status"].get("status", "unknown")
+        dep = self._cloud_client.deployment.get(deployment_id)
+        status = dep._schema.status if dep._schema.status else "unknown"
+        # Escape any characters that are interpreted as markup
+        status = status.replace("[", "\\[")
         if status == "running":
             return DeploymentStatus.RUNNING
         elif status == "failed":
@@ -202,30 +190,20 @@ class BentoCloudDeploymentManager(DeploymentManager):
         else:
             return DeploymentStatus.PENDING
 
-    def wait_until_ready(self, deployment_id: str, timeout: int = 3600) -> bool:
-        import time
-
-        start = time.time()
-        while time.time() - start < timeout:
-            status = self.get_status(deployment_id=deployment_id)
-            if status == DeploymentStatus.RUNNING:
-                return True
-            elif status == DeploymentStatus.FAILED:
-                return False
-            time.sleep(5)
-        return False
+    def wait_until_ready(
+        self, deployment_id: str, timeout: int = 3600
+    ) -> t.Tuple[DeploymentResponse, bool]:
+        dep = self._cloud_client.deployment.get(name=deployment_id)
+        retcode = dep.wait_until_ready(timeout=timeout)
+        if retcode != 0:
+            return dep.to_dict(), False
+        return dep.to_dict(), True
 
     def get_endpoint_urls(
         self,
-        deployment_id: t.Optional[str] = None,
-        deployment: t.Optional[DeploymentResponse] = None,
+        deployment_id: str,
     ) -> list[str]:
-        if deployment_id:
-            dep = self.get_deployment(deployment_id)
-        elif deployment:
-            dep = deployment
-        else:
-            raise ValueError("Either deployment_id or deployment must be provided")
+        dep = self.get_deployment(deployment_id)
         latest = self._cloud_client.deployment._client.v2.get_deployment(
             dep["name"], dep["cluster"]
         )

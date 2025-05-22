@@ -58,8 +58,8 @@ def display_deployment_info(
 ) -> None:
     """Display deployment summary, status, and endpoint URLs using rich panels."""
     name = deployment.get("name") or deployment.get("uid") or deployment.get("id")
-    status = deployment_manager.get_status(deployment=deployment)
-    urls = deployment_manager.get_endpoint_urls(deployment=deployment)
+    status = deployment_manager.get_status(name)
+    urls = deployment_manager.get_endpoint_urls(name)
     created_at = deployment.get("created_at", "")
     summary = (
         f"[white]Name:[/] [cyan]{name}[/]\n"
@@ -142,7 +142,6 @@ def _handle_deploy_create(
     # we should find a better way to do this once build is finished/generic
     configure_target_environment(TargetEnum.BENTO)
     entry_service = load_entry_service(pipeline)
-    print("entry_service", entry_service)
 
     deployment_manager = get_deployment_manager(target, endpoint)
     env_dicts = _build_env_dicts(config_file=config_file, args=ctx.args, envs=envs)
@@ -157,13 +156,13 @@ def _handle_deploy_create(
         console.print("[bold green]Creating deployment...")
         deployment = deployment_manager.create_deployment(
             deployment,
-            wait=wait,
-            timeout=timeout,
             dev=dev,
         )
-        console.print(f"[bold green]Deployment '{name}' created. Waiting for status...")
+        console.print(f"[bold green]Deployment '{name}' created.")
         if wait:
-            ready = deployment_manager.wait_until_ready(name, timeout=timeout)
+            deployment, ready = deployment_manager.wait_until_ready(
+                name, timeout=timeout
+            )
             if ready:
                 console.print(
                     Panel(
@@ -182,7 +181,6 @@ def _handle_deploy_create(
         display_deployment_info(deployment_manager, deployment)
         return deployment
     except Exception as e:
-        print(e.__dict__)
         if isinstance(e, RuntimeError) and isinstance(e.args[0], tuple):
             status, msg, url = e.args[0]
             if status == 409:

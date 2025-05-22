@@ -98,7 +98,7 @@ class DeploymentStatus(str, Enum):
 @dataclass
 class ScalingPolicy:
     policy: str
-    parameters: dict[str, t.Union[int, float, str]] = field(default_factory=dict)
+    parameters: t.Dict[str, t.Union[int, float, str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -137,7 +137,7 @@ class Deployment:
 
 
 # Type alias for deployment responses (e.g., from backend APIs)
-DeploymentResponse = dict[str, t.Any]
+DeploymentResponse = t.Dict[str, t.Any]
 
 
 class DeploymentManager(ABC):
@@ -179,11 +179,8 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
+    def list_deployments(self) -> t.List[DeploymentResponse]:
         """List all deployments.
-
-        Args:
-            **kwargs: Additional backend-specific arguments
 
         Returns:
             List of dictionaries containing deployment id and details
@@ -191,26 +188,23 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def delete_deployment(self, deployment_id: str, **kwargs) -> None:
+    def delete_deployment(self, deployment_id: str) -> None:
         """Delete a deployment.
 
         Args:
             deployment_id: The ID of the deployment to delete
-            **kwargs: Additional backend-specific arguments
         """
         pass
 
     @abstractmethod
     def get_status(
         self,
-        deployment_id: t.Optional[str] = None,
-        deployment: t.Optional[DeploymentResponse] = None,
+        deployment_id: str,
     ) -> DeploymentStatus:
         """Get the current status of a deployment.
 
         Args (one of):
             deployment_id: The ID of the deployment
-            deployment: The deployment response
 
         Returns:
             The current status of the deployment
@@ -218,7 +212,9 @@ class DeploymentManager(ABC):
         pass
 
     @abstractmethod
-    def wait_until_ready(self, deployment_id: str, timeout: int = 3600) -> bool:
+    def wait_until_ready(
+        self, deployment_id: str, timeout: int = 3600
+    ) -> t.Tuple[DeploymentResponse, bool]:
         """Wait until a deployment is ready.
 
         Args:
@@ -226,21 +222,19 @@ class DeploymentManager(ABC):
             timeout: Maximum time to wait in seconds
 
         Returns:
-            True if deployment became ready, False if timed out
+            Tuple of deployment response and a boolean indicating if the deployment became ready
         """
         pass
 
     @abstractmethod
     def get_endpoint_urls(
         self,
-        deployment_id: t.Optional[str] = None,
-        deployment: t.Optional[DeploymentResponse] = None,
-    ) -> list[str]:
+        deployment_id: str,
+    ) -> t.List[str]:
         """Get the list of endpoint urls attached to a deployment.
 
         Args (one of):
             deployment_id: The ID of the deployment
-            deployment: The deployment response
 
         Returns:
             List of deployment's endpoint urls

@@ -178,7 +178,7 @@ class KubernetesDeploymentManager(DeploymentManager):
             msg = e.response.text if e.response is not None else str(e)
             raise RuntimeError((status, msg, url)) from e
 
-    def list_deployments(self, **kwargs) -> list[DeploymentResponse]:
+    def list_deployments(self) -> t.List[DeploymentResponse]:
         """List all deployments."""
         url = f"{self.endpoint}/api/v2/deployments"
         try:
@@ -192,7 +192,7 @@ class KubernetesDeploymentManager(DeploymentManager):
                 (e.response.status_code if e.response else None, msg, url)
             )
 
-    def delete_deployment(self, deployment_id: str, **kwargs) -> None:
+    def delete_deployment(self, deployment_id: str) -> None:
         """Delete a deployment."""
         url = f"{self.endpoint}/api/v2/deployments/{deployment_id}"
         try:
@@ -205,15 +205,9 @@ class KubernetesDeploymentManager(DeploymentManager):
 
     def get_status(
         self,
-        deployment_id: t.Optional[str] = None,
-        deployment: t.Optional[DeploymentResponse] = None,
+        deployment_id: str,
     ) -> DeploymentStatus:
-        if deployment_id:
-            dep = self.get_deployment(deployment_id)
-        elif deployment:
-            dep = deployment
-        else:
-            raise ValueError("Either deployment_id or deployment must be provided")
+        dep = self.get_deployment(deployment_id)
         status = dep.get("status", "unknown")
         if status == "running":
             return DeploymentStatus.RUNNING
@@ -226,26 +220,23 @@ class KubernetesDeploymentManager(DeploymentManager):
         else:
             return DeploymentStatus.PENDING
 
-    def wait_until_ready(self, deployment_id: str, timeout: int = 3600) -> bool:
+    def wait_until_ready(
+        self, deployment_id: str, timeout: int = 3600
+    ) -> t.Tuple[DeploymentResponse, bool]:
         start = time.time()
         while time.time() - start < timeout:
+            dep = self.get_deployment(deployment_id)
             status = self.get_status(deployment_id)
             if status == DeploymentStatus.RUNNING:
-                return True
+                return dep, True
             elif status == DeploymentStatus.FAILED:
-                return False
+                return dep, False
             time.sleep(5)
-        return False
+        return dep, False
 
     def get_endpoint_urls(
         self,
-        deployment_id: t.Optional[str] = None,
-        deployment: t.Optional[DeploymentResponse] = None,
-    ) -> list[str]:
-        if deployment_id:
-            dep = self.get_deployment(deployment_id)
-        elif deployment:
-            dep = deployment
-        else:
-            raise ValueError("Either deployment_id or deployment must be provided")
+        deployment_id: str,
+    ) -> t.List[str]:
+        dep = self.get_deployment(deployment_id)
         return dep.get("urls", [])

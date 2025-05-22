@@ -203,7 +203,7 @@ def _get_dir_size(path: str) -> int:
             fp = os.path.join(dirpath, f)
             if os.path.isfile(fp):
                 total += os.path.getsize(fp)
-    print(f"Total size of {path}: {total} bytes")
+    logger.info(f"Total size of {path}: {total} bytes")
     return total
 
 
